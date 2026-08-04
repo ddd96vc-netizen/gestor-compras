@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+{% block title %}Estadísticas · Gestor de Compras{% endblock %}
+
+{% block content %}
+
+<div class="estadisticas-page">
+    <div class="page-header">
+        <div>
+            <h1><i class="fas fa-chart-bar"></i> Estadísticas</h1>
+            <p class="subtitle">Análisis completo de tus compras</p>
+        </div>
+    </div>
+
+    <!-- RESUMEN GENERAL -->
+    <div class="stats-cards">
+        <div class="stat-card card-blue">
+            <div class="stat-icon"><i class="fas fa-euro-sign"></i></div>
+            <div class="stat-content">
+                <h3>Total Gastado</h3>
+                <p class="stat-number">{{ "%.2f"|format(datos_generales.total) }}€</p>
+                <span class="stat-label">en todas las compras</span>
+            </div>
+        </div>
+
+        <div class="stat-card card-green">
+            <div class="stat-icon"><i class="fas fa-receipt"></i></div>
+            <div class="stat-content">
+                <h3>Total Tickets</h3>
+                <p class="stat-number">{{ datos_generales.num_tickets }}</p>
+                <span class="stat-label">compras registradas</span>
+            </div>
+        </div>
+
+        <div class="stat-card card-purple">
+            <div class="stat-icon"><i class="fas fa-chart-line"></i></div>
+            <div class="stat-content">
+                <h3>Promedio</h3>
+                <p class="stat-number">{{ "%.2f"|format(datos_generales.promedio_ticket) }}€</p>
+                <span class="stat-label">por ticket</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- TIENDA CON MÁS GASTO -->
+    {% if datos_tiendas.tienda_top %}
+    <div class="highlight-card">
+        <div class="highlight-icon"><i class="fas fa-trophy"></i></div>
+        <div class="highlight-content">
+            <div>
+                <h2>Tienda donde más has gastado</h2>
+                <p class="highlight-name">{{ datos_tiendas.tienda_top.nombre }}</p>
+                <p class="highlight-amount">{{ "%.2f"|format(datos_tiendas.tienda_top.total) }}€ ({{ datos_tiendas.tienda_top.porcentaje }}% del total)</p>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- GRÁFICO DE TIENDAS -->
+    <div class="chart-section">
+        <h2><i class="fas fa-chart-pie"></i> Distribución por Tiendas</h2>
+        <div class="chart-container" style="height: 400px;">
+            <canvas id="graficoTiendas"></canvas>
+        </div>
+    </div>
+
+    <!-- ACCESOS RÁPIDOS -->
+    <div class="quick-stats">
+        <h2><i class="fas fa-bolt"></i> Más Estadísticas</h2>
+        <div class="stats-grid">
+            <a href="{{ url_for('stats.tiendas') }}" class="stat-link">
+                <i class="fas fa-store"></i>
+                <h3>Análisis por Tiendas</h3>
+                <p>Ver detalles de cada tienda</p>
+            </a>
+            <a href="{{ url_for('stats.fechas') }}" class="stat-link">
+                <i class="fas fa-calendar"></i>
+                <h3>Gastos por Fechas</h3>
+                <p>Filtrar por rango de fechas</p>
+            </a>
+            <a href="{{ url_for('stats.frecuencia') }}" class="stat-link">
+                <i class="fas fa-sync"></i>
+                <h3>Frecuencia Productos</h3>
+                <p>Ver productos más comprados</p>
+            </a>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script>
+    const tiendas = {{ datos_tiendas.tiendas | tojson }};
+    const ctx = document.getElementById('graficoTiendas');
+    if (ctx && tiendas.length > 0) {
+        new Chart(ctx, {
+            type: 'pie',
+            data: {
+                labels: tiendas.map(t => t.nombre),
+                datasets: [{
+                    data: tiendas.map(t => t.total),
+                    backgroundColor: [
+                        'rgba(54, 162, 235, 0.8)', 'rgba(255, 99, 132, 0.8)',
+                        'rgba(255, 206, 86, 0.8)', 'rgba(75, 192, 192, 0.8)',
+                        'rgba(153, 102, 255, 0.8)', 'rgba(255, 159, 64, 0.8)',
+                    ],
+                    borderColor: 'white',
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'bottom' },
+                    tooltip: {
+                        callbacks: {
+                            label: c => `${c.label}: ${c.parsed.toFixed(2)}€`
+                        }
+                    }
+                }
+            }
+        });
+    }
+</script>
+{% endblock %}

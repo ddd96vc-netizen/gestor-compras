@@ -1,0 +1,228 @@
+{% extends "base.html" %}
+{% block title %}Buscar Producto · Gestor de Compras{% endblock %}
+
+{% block content %}
+
+<div class="search-page">
+    <div class="page-header">
+        <h1><i class="fas fa-search"></i> Buscar Producto</h1>
+        <p class="subtitle">Encuentra productos en tus compras anteriores</p>
+    </div>
+
+    <!-- FORMULARIO DE BÚSQUEDA -->
+    <div class="card">
+        <form method="POST" action="{{ url_for('tickets.buscar_producto') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="form-group">
+                <label for="nombre_producto"><i class="fas fa-tag"></i> Nombre del producto:</label>
+                <input type="text" id="nombre_producto" name="nombre_producto"
+                       placeholder="Ej: leche, pan, manzanas..." required autofocus>
+            </div>
+            <button type="submit" class="btn btn-primary">
+                <i class="fas fa-search"></i> Buscar
+            </button>
+        </form>
+    </div>
+
+    <!-- RESULTADOS -->
+    {% if resultados is not none %}
+        {% if resultados %}
+            <div class="card">
+                <h2><i class="fas fa-check-circle"></i> Se encontraron {{ resultados|length }} resultados</h2>
+                <p class="subtitle">Pulsa el nombre de un producto para editarlo.</p>
+
+                <div class="results-table-container">
+                    <table class="tickets-table">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th><i class="fas fa-shopping-basket"></i> Producto</th>
+                                <th>Cant.</th>
+                                <th><i class="fas fa-euro-sign"></i> Precio</th>
+                                <th>Importe</th>
+                                <th><i class="fas fa-store"></i> Tienda</th>
+                                <th><i class="fas fa-calendar"></i> Fecha</th>
+                                <th><i class="fas fa-tag"></i> Categoría</th>
+                                <th><i class="fas fa-heart"></i></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in resultados %}
+                            <tr>
+                                <td>{{ loop.index }}</td>
+                                <td>
+                                    <span class="producto-clickable" role="button" tabindex="0"
+                                          data-editar
+                                          data-id="{{ item.id }}"
+                                          data-nombre="{{ item.nombre }}"
+                                          data-cantidad="{{ item.cantidad }}"
+                                          data-precio="{{ item.precio }}"
+                                          data-importe="{{ item.importe }}"
+                                          data-categoria="{{ item.categoria or '' }}"
+                                          data-observacion="{{ item.observacion or '' }}">
+                                        <strong>{{ item.nombre }}</strong>
+                                    </span>
+                                </td>
+                                <td>{{ item.cantidad }}</td>
+                                <td>{{ "%.2f"|format(item.precio) }}€</td>
+                                <td class="ticket-total">{{ "%.2f"|format(item.importe) }}€</td>
+                                <td>{{ item.tienda }}</td>
+                                <td>{{ item.fecha_dia }}</td>
+                                <td>
+                                    {% if item.categoria %}
+                                        <span class="badge badge-info">{{ item.categoria }}</span>
+                                    {% else %}
+                                        <span class="badge">Sin categoría</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <button type="button" class="btn-favorito {% if item.favorito %}activo{% endif %}"
+                                            data-favorito data-nombre="{{ item.nombre }}"
+                                            aria-pressed="{{ 'true' if item.favorito else 'false' }}"
+                                            title="{{ 'Quitar de favoritos' if item.favorito else 'Añadir a favoritos' }}">
+                                        <i class="{{ 'fas' if item.favorito else 'far' }} fa-heart"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- ESTADÍSTICAS RÁPIDAS -->
+                <div class="search-stats">
+                    <h3><i class="fas fa-chart-bar"></i> Estadísticas de búsqueda</h3>
+                    <p><strong>Veces comprado:</strong> {{ resultados|length }}</p>
+                    <p><strong>Total gastado:</strong> {{ "%.2f"|format(resultados|sum(attribute='importe')) }}€</p>
+                    <p><strong>Precio promedio (unitario):</strong> {{ "%.2f"|format(resultados|sum(attribute='precio') / resultados|length) }}€</p>
+                </div>
+            </div>
+        {% else %}
+            <div class="card">
+                <div class="empty-state">
+                    <i class="fas fa-inbox"></i>
+                    <h2>No se encontraron productos</h2>
+                    <p>No hay productos que coincidan con "{{ termino }}".</p>
+                </div>
+            </div>
+        {% endif %}
+    {% endif %}
+</div>
+
+<!-- MODAL DE EDICIÓN -->
+<div id="modalEditarProducto" class="modal">
+    <div class="modal-content estrecho">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <h3 class="modal-titulo" style="margin: 0; border: none; padding: 0;"><i class="fas fa-edit"></i> Editar Producto</h3>
+            <button type="button" class="modal-cerrar" data-cerrar-modal aria-label="Cerrar">&times;</button>
+        </div>
+
+        <form id="formEditarProducto" class="modal-form">
+            <input type="hidden" id="editId">
+            <div class="form-group">
+                <label for="editNombre">Nombre</label>
+                <input type="text" id="editNombre" required>
+            </div>
+            <div class="form-group">
+                <label for="editCantidad">Cantidad</label>
+                <input type="number" min="1" step="1" id="editCantidad" placeholder="1">
+            </div>
+            <div class="form-group">
+                <label for="editPrecio">Precio unitario (€)</label>
+                <input type="number" step="0.01" min="0" id="editPrecio" required>
+            </div>
+            <div class="form-group">
+                <label for="editImporte">Importe (€)</label>
+                <input type="number" step="0.01" min="0" id="editImporte" placeholder="auto (precio × cantidad)">
+            </div>
+            <div class="form-group">
+                <label for="editCategoria">Categoría</label>
+                <input type="text" id="editCategoria" placeholder="Sin categoría">
+            </div>
+            <div class="form-group">
+                <label for="editObservacion">Observación</label>
+                <textarea id="editObservacion" rows="2"></textarea>
+            </div>
+
+            <div class="modal-acciones">
+                <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Guardar</button>
+                <button type="button" class="btn btn-secondary" data-cerrar-modal><i class="fas fa-times"></i> Cancelar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const modal = document.getElementById('modalEditarProducto');
+
+    function abrirModal() { modal.classList.add('abierto'); }
+    function cerrarModal() { modal.classList.remove('abierto'); }
+
+    // Abrir el modal leyendo los datos de los atributos data-* (seguro frente a XSS).
+    document.addEventListener('click', function (e) {
+        const disparador = e.target.closest('[data-editar]');
+        if (!disparador) return;
+        document.getElementById('editId').value = disparador.dataset.id;
+        document.getElementById('editNombre').value = disparador.dataset.nombre;
+        document.getElementById('editCantidad').value = disparador.dataset.cantidad || 1;
+        document.getElementById('editPrecio').value = parseFloat(disparador.dataset.precio).toFixed(2);
+        document.getElementById('editImporte').value = parseFloat(disparador.dataset.importe).toFixed(2);
+        document.getElementById('editCategoria').value = disparador.dataset.categoria || '';
+        document.getElementById('editObservacion').value = disparador.dataset.observacion || '';
+        abrirModal();
+    });
+
+    // Permitir abrir con Enter/Espacio desde el teclado (accesibilidad).
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') cerrarModal();
+        const foco = document.activeElement;
+        if ((e.key === 'Enter' || e.key === ' ') && foco && foco.matches('[data-editar]')) {
+            e.preventDefault();
+            foco.click();
+        }
+    });
+
+    document.querySelectorAll('[data-cerrar-modal]').forEach(b => b.addEventListener('click', cerrarModal));
+    modal.addEventListener('click', e => { if (e.target === modal) cerrarModal(); });
+
+    // Guardar cambios contra la API (fetchJSON añade el token CSRF).
+    document.getElementById('formEditarProducto').addEventListener('submit', async function (e) {
+        e.preventDefault();
+        const datos = {
+            producto_id: document.getElementById('editId').value,
+            nombre: document.getElementById('editNombre').value.trim(),
+            cantidad: parseInt(document.getElementById('editCantidad').value, 10) || 1,
+            precio: parseFloat(document.getElementById('editPrecio').value),
+            importe: document.getElementById('editImporte').value.trim() || null,
+            categoria: document.getElementById('editCategoria').value.trim(),
+            observacion: document.getElementById('editObservacion').value.trim(),
+        };
+        if (!datos.nombre) { alert('El nombre del producto es obligatorio.'); return; }
+        if (isNaN(datos.precio) || datos.precio < 0) { alert('El precio debe ser un número válido.'); return; }
+
+        const boton = this.querySelector('button[type="submit"]');
+        const original = boton.innerHTML;
+        boton.innerHTML = 'Guardando...';
+        boton.disabled = true;
+
+        try {
+            const respuesta = await fetchJSON('{{ url_for("api.editar_producto") }}', datos);
+            const resultado = await respuesta.json();
+            if (resultado.success) {
+                window.location.reload();
+            } else {
+                alert('Error: ' + (resultado.message || 'No se pudo guardar.'));
+                boton.innerHTML = original;
+                boton.disabled = false;
+            }
+        } catch (err) {
+            alert('Error de conexión: ' + err.message);
+            boton.innerHTML = original;
+            boton.disabled = false;
+        }
+    });
+</script>
+{% endblock %}

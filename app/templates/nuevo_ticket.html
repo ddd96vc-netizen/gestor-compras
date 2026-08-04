@@ -1,0 +1,285 @@
+{% extends "base.html" %}
+
+{% block title %}Nuevo Ticket · Gestor de Compras{% endblock %}
+
+{% block content %}
+
+<div class="form-page">
+    <div class="page-header">
+        <div>
+            <h1><i class="fas fa-plus-circle"></i> Nuevo Ticket</h1>
+            <p class="subtitle">Registra una nueva compra</p>
+        </div>
+        <a href="{{ url_for('escaneo.desde_foto') }}" class="btn btn-secondary">
+            <i class="fas fa-camera"></i> Escanear con foto
+        </a>
+    </div>
+
+    {% if prefill %}
+    <div class="alert alert-info">
+        <span class="alert-icon"><i class="fas fa-magic"></i></span>
+        Hemos rellenado el ticket a partir de la foto. <strong>Revisa y corrige</strong> lo que haga falta antes de guardar.
+    </div>
+    {% endif %}
+
+    {% if texto_ocr %}
+    <details class="card" style="margin-bottom: 1.5rem;">
+        <summary style="cursor: pointer; font-weight: 600;">
+            <i class="fas fa-eye"></i> Ver el texto leído por el OCR (diagnóstico)
+        </summary>
+        <pre style="white-space: pre-wrap; margin-top: 1rem; font-size: 0.9rem; color: var(--text-light);">{{ texto_ocr }}</pre>
+    </details>
+    {% endif %}
+
+    <form method="POST" action="{{ url_for('tickets.nuevo_ticket') }}" id="formTicket" class="ticket-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <!-- INFORMACIÓN DEL TICKET -->
+        <div class="form-section">
+            <h2><i class="fas fa-info-circle"></i> Información General</h2>
+
+            <div class="form-grid">
+                <div class="form-group">
+                    <label for="tienda"><i class="fas fa-store"></i> Tienda *</label>
+                    <input type="text" id="tienda" name="tienda" placeholder="Ej: Mercadona, Carrefour..." required>
+                </div>
+
+                <div class="form-group">
+                    <label for="fecha"><i class="fas fa-calendar"></i> Fecha y hora *</label>
+                    <input type="datetime-local" id="fecha" name="fecha" required>
+                </div>
+            </div>
+        </div>
+
+        <!-- PRODUCTOS -->
+        <div class="form-section">
+            <div class="section-header-inline">
+                <h2><i class="fas fa-shopping-basket"></i> Productos</h2>
+                <button type="button" onclick="agregarProducto()" class="btn btn-secondary">
+                    <i class="fas fa-plus"></i> Agregar Producto
+                </button>
+            </div>
+
+            <div id="productos-container" class="productos-list"></div>
+
+            <!-- Botón también AQUÍ ABAJO: para no tener que subir arriba cada vez -->
+            <div class="form-actions" style="margin-top: 1rem; margin-bottom: 0;">
+                <button type="button" onclick="agregarProducto()" class="btn btn-secondary">
+                    <i class="fas fa-plus"></i> Agregar Producto
+                </button>
+            </div>
+
+            <div class="empty-products" id="emptyProducts">
+                <i class="fas fa-shopping-cart"></i>
+                <p>No hay productos agregados</p>
+                <button type="button" onclick="agregarProducto()" class="btn btn-primary">
+                    <i class="fas fa-plus"></i> Agregar primer producto
+                </button>
+            </div>
+        </div>
+
+        <!-- TOTAL -->
+        <div class="form-section total-section">
+            <div class="total-display">
+                <span class="total-label">Total:</span>
+                <span class="total-amount">
+                    <i class="fas fa-euro-sign"></i>
+                    <span id="totalAmount">0.00</span>
+                </span>
+            </div>
+        </div>
+
+        <!-- BOTONES -->
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary btn-lg">
+                <i class="fas fa-save"></i> Guardar Ticket
+            </button>
+            <a href="{{ url_for('tickets.index') }}" class="btn btn-secondary btn-lg">
+                <i class="fas fa-times"></i> Cancelar
+            </a>
+        </div>
+    </form>
+</div>
+
+<!-- TEMPLATE PARA NUEVO PRODUCTO -->
+<template id="productoTemplate">
+    <div class="producto-item">
+        <div class="producto-number"></div>
+        <div class="producto-fields">
+            <div class="form-group">
+                <label>Nombre del producto *</label>
+                <input type="text" name="producto_nombre[]" placeholder="Ej: Leche, Pan, Manzanas..." required>
+            </div>
+            <div class="form-group">
+                <label>Cantidad</label>
+                <input type="number" name="producto_cantidad[]" placeholder="1" min="1" step="1" oninput="actualizarTotal()">
+            </div>
+            <div class="form-group">
+                <label>Precio (€) *</label>
+                <input type="number" name="producto_precio[]" placeholder="0.00" step="0.01" min="0" required oninput="actualizarTotal()">
+            </div>
+            <div class="form-group">
+                <label>Importe</label>
+                <input type="number" name="producto_importe[]" class="importe-linea" step="0.01" min="0" placeholder="auto" oninput="marcarImporteManual(this)">
+            </div>
+            <div class="form-group">
+                <label>Categoría</label>
+                <select name="producto_categoria[]" onchange="comprobarNuevaCategoria(this)">
+                    <option value="">Sin categoría</option>
+                    {% for categoria in categorias %}
+                    <option value="{{ categoria }}">{{ categoria }}</option>
+                    {% endfor %}
+                    <option value="__nueva__">+ Nueva categoría...</option>
+                </select>
+            </div>
+            <div class="form-group form-group-full">
+                <label>Observación</label>
+                <input type="text" name="producto_observacion[]" placeholder="Notas adicionales (opcional)">
+            </div>
+        </div>
+        <div class="producto-controles">
+            <input type="hidden" name="producto_favorito[]" value="0">
+            <button type="button" class="btn-fav-form" onclick="alternarFavForm(this)"
+                    title="Marcar como favorito" aria-pressed="false">
+                <i class="far fa-heart"></i>
+            </button>
+            <button type="button" class="btn-remove-product" onclick="eliminarProducto(this)" title="Eliminar producto" aria-label="Eliminar producto">
+                <i class="fas fa-trash"></i>
+            </button>
+        </div>
+    </div>
+</template>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Datos precargados desde el escaneo (null si se entra a mano).
+    const PREFILL = {{ prefill | tojson }};
+
+    let contadorProductos = 0;
+
+    document.addEventListener('DOMContentLoaded', function () {
+        if (PREFILL && PREFILL.productos && PREFILL.productos.length) {
+            // --- Modo revisión: rellenar con lo detectado en la foto ---
+            if (PREFILL.tienda) document.getElementById('tienda').value = PREFILL.tienda;
+            if (PREFILL.fecha) document.getElementById('fecha').value = PREFILL.fecha;
+            PREFILL.productos.forEach(agregarProductoConDatos);
+        } else {
+            // --- Modo normal: fecha actual y un producto vacío ---
+            document.getElementById('fecha').value = fechaLocalAhora();
+            agregarProducto();
+        }
+        actualizarTotal();
+    });
+
+    function fechaLocalAhora() {
+        const a = new Date();
+        return a.getFullYear() + '-' +
+            String(a.getMonth() + 1).padStart(2, '0') + '-' +
+            String(a.getDate()).padStart(2, '0') + 'T' +
+            String(a.getHours()).padStart(2, '0') + ':' +
+            String(a.getMinutes()).padStart(2, '0');
+    }
+
+    function nuevaFila() {
+        contadorProductos++;
+        const clone = document.getElementById('productoTemplate').content.cloneNode(true);
+        clone.querySelector('.producto-number').textContent = `#${contadorProductos}`;
+        document.getElementById('productos-container').appendChild(clone);
+        document.getElementById('emptyProducts').style.display = 'none';
+        return document.getElementById('productos-container').lastElementChild;
+    }
+
+    function agregarProducto() {
+        const fila = nuevaFila();
+        setTimeout(() => fila.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 100);
+    }
+
+    // Crea una fila ya rellenada con un producto detectado por el OCR.
+    function agregarProductoConDatos(p) {
+        const fila = nuevaFila();
+        fila.querySelector('input[name="producto_nombre[]"]').value = p.nombre || '';
+        fila.querySelector('input[name="producto_cantidad[]"]').value = p.cantidad && p.cantidad > 1 ? p.cantidad : '';
+        fila.querySelector('input[name="producto_precio[]"]').value =
+            (typeof p.precio === 'number') ? p.precio.toFixed(2) : '';
+        actualizarImporteFila(fila);
+    }
+
+    function eliminarProducto(btn) {
+        btn.closest('.producto-item').remove();
+        const container = document.getElementById('productos-container');
+        if (container.children.length === 0) {
+            document.getElementById('emptyProducts').style.display = 'flex';
+            contadorProductos = 0;
+        } else {
+            container.querySelectorAll('.producto-item').forEach((item, i) => {
+                item.querySelector('.producto-number').textContent = `#${i + 1}`;
+            });
+            contadorProductos = container.children.length;
+        }
+        actualizarTotal();
+    }
+
+    // Cantidad vacía cuenta como 1 (igual que hace el backend al guardar).
+    function leerCantidad(fila) {
+        const valor = parseInt(fila.querySelector('input[name="producto_cantidad[]"]').value, 10);
+        return (Number.isInteger(valor) && valor >= 1) ? valor : 1;
+    }
+
+    // Marca el importe como "editado a mano" para no volver a sobrescribirlo.
+    // Si el usuario lo deja vacío, vuelve al modo automático.
+    function marcarImporteManual(input) {
+        input.dataset.manual = input.value.trim() === '' ? '' : '1';
+        const fila = input.closest('.producto-item');
+        if (!input.dataset.manual) actualizarImporteFila(fila);
+        actualizarTotal();
+    }
+
+    function actualizarImporteFila(fila) {
+        const importeInput = fila.querySelector('.importe-linea');
+        const cantidad = leerCantidad(fila);
+        const precio = parseFloat(fila.querySelector('input[name="producto_precio[]"]').value) || 0;
+        // Solo autocalcular si el usuario NO lo ha escrito a mano.
+        if (importeInput.dataset.manual !== '1') {
+            importeInput.value = (cantidad * precio).toFixed(2);
+        }
+        return parseFloat(importeInput.value) || 0;
+    }
+
+    function actualizarTotal() {
+        let total = 0;
+        document.querySelectorAll('#productos-container .producto-item').forEach(fila => {
+            total += actualizarImporteFila(fila);
+        });
+        document.getElementById('totalAmount').textContent = total.toFixed(2);
+    }
+
+    function comprobarNuevaCategoria(select) {
+        if (select.value !== '__nueva__') return;
+        const nueva = (prompt('Nombre de la nueva categoría:') || '').trim();
+        const opcionNueva = select.querySelector('option[value="__nueva__"]');
+        if (nueva) {
+            const opt = document.createElement('option');
+            opt.value = nueva;
+            opt.textContent = nueva;
+            select.insertBefore(opt, opcionNueva);
+            select.value = nueva;
+        } else {
+            select.value = '';
+        }
+    }
+
+    // Recalcular al escribir la cantidad (los precios ya lo hacen vía oninput).
+    document.getElementById('productos-container').addEventListener('input', function (e) {
+        if (e.target.name === 'producto_cantidad[]') actualizarTotal();
+    });
+
+    document.getElementById('formTicket').addEventListener('submit', function (e) {
+        if (document.getElementById('productos-container').children.length === 0) {
+            e.preventDefault();
+            alert('Debes agregar al menos un producto.');
+        }
+    });
+</script>
+{% endblock %}

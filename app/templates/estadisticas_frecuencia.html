@@ -1,0 +1,204 @@
+{% extends "base.html" %}
+{% block title %}Frecuencia de Productos · Gestor de Compras{% endblock %}
+
+{% block content %}
+
+<div class="stats-frecuencia-page">
+    <div class="page-header">
+        <h1><i class="fas fa-sync-alt"></i> Frecuencia de Compra</h1>
+        <p class="subtitle">¿Qué productos compras más?</p>
+    </div>
+
+    <!-- FORMULARIO -->
+    <div class="card">
+        <h2><i class="fas fa-search"></i> Buscar Producto</h2>
+
+        <form method="POST" action="{{ url_for('stats.frecuencia') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="form-group">
+                <label for="nombre_producto"><i class="fas fa-tag"></i> Nombre del producto:</label>
+                <input type="text" id="nombre_producto" name="nombre_producto" placeholder="Ej: leche, pan..." required autofocus>
+            </div>
+            <button type="submit" class="btn btn-primary">
+                <i class="fas fa-chart-bar"></i> Analizar Frecuencia
+            </button>
+        </form>
+    </div>
+
+    <!-- RESULTADOS -->
+    {% if datos %}
+        {% if datos.compras %}
+            <div class="stats-cards">
+                <div class="stat-card card-blue">
+                    <div class="stat-icon"><i class="fas fa-shopping-cart"></i></div>
+                    <div class="stat-content">
+                        <h3>Veces Comprado</h3>
+                        <p class="stat-number">{{ datos.frecuencia }}</p>
+                        <span class="stat-label">compras totales</span>
+                    </div>
+                </div>
+
+                <div class="stat-card card-green">
+                    <div class="stat-icon"><i class="fas fa-euro-sign"></i></div>
+                    <div class="stat-content">
+                        <h3>Precio Promedio</h3>
+                        <p class="stat-number">{{ "%.2f"|format(datos.precio_promedio) }}€</p>
+                        <span class="stat-label">por unidad</span>
+                    </div>
+                </div>
+
+                <div class="stat-card card-purple">
+                    <div class="stat-icon"><i class="fas fa-chart-line"></i></div>
+                    <div class="stat-content">
+                        <h3>Rango de Precios</h3>
+                        <p class="stat-number">{{ "%.2f"|format(datos.precio_minimo) }}€ - {{ "%.2f"|format(datos.precio_maximo) }}€</p>
+                        <span class="stat-label">diferencia: {{ "%.2f"|format(datos.diferencia) }}€</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TIENDA MÁS BARATA -->
+            <div class="card highlight-card-green">
+                <div class="highlight-content">
+                    <div class="trophy-icon">💰</div>
+                    <div>
+                        <h3>Tienda más económica para "{{ datos.nombre_busqueda }}"</h3>
+                        <p class="store-name">{{ datos.tienda_mas_barata.nombre }}</p>
+                        <p class="store-amount">Promedio: {{ "%.2f"|format(datos.tienda_mas_barata.promedio) }}€</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- HISTORIAL -->
+            <div class="card">
+                <h3><i class="fas fa-history"></i> Historial Completo</h3>
+                <div class="tickets-table-container">
+                    <table class="tickets-table">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th><i class="fas fa-calendar"></i> Fecha</th>
+                                <th><i class="fas fa-store"></i> Tienda</th>
+                                <th><i class="fas fa-euro-sign"></i> Precio</th>
+                                <th><i class="fas fa-shopping-basket"></i> Nombre Completo</th>
+                                <th><i class="fas fa-tag"></i> Categoría</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for compra in datos.compras %}
+                            <tr>
+                                <td>{{ loop.index }}</td>
+                                <td>{{ compra.fecha_dia }}</td>
+                                <td>{{ compra.tienda }}</td>
+                                <td class="ticket-total">{{ "%.2f"|format(compra.precio) }}€</td>
+                                <td><strong>{{ compra.nombre_completo }}</strong></td>
+                                <td>
+                                    {% if compra.categoria and compra.categoria != 'Sin categoría' %}
+                                        <span class="badge badge-info">{{ compra.categoria }}</span>
+                                    {% else %}
+                                        <span class="badge">Sin categoría</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- COMPARATIVA POR TIENDA -->
+            <div class="card">
+                <h3><i class="fas fa-balance-scale"></i> Comparativa de Precios por Tienda</h3>
+                <div class="tickets-table-container">
+                    <table class="tickets-table">
+                        <thead>
+                            <tr>
+                                <th><i class="fas fa-store"></i> Tienda</th>
+                                <th><i class="fas fa-shopping-cart"></i> Veces Comprado</th>
+                                <th><i class="fas fa-euro-sign"></i> Precio Promedio</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for tienda in datos.tiendas_distintas %}
+                            <tr>
+                                <td><strong>{{ tienda }}</strong></td>
+                                <td><span class="badge badge-info">{{ datos.compras|selectattr('tienda', 'equalto', tienda)|list|length }} veces</span></td>
+                                <td class="ticket-total">{{ "%.2f"|format(datos.promedios_tiendas[tienda]) }}€</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- GRÁFICO -->
+            <div class="card">
+                <h3><i class="fas fa-chart-line"></i> Evolución del Precio</h3>
+                <div class="chart-container" style="height: 400px;">
+                    <canvas id="graficoEvolucion"></canvas>
+                </div>
+            </div>
+        {% else %}
+            <div class="card">
+                <div class="empty-state">
+                    <i class="fas fa-inbox"></i>
+                    <h2>No se encontraron compras</h2>
+                    <p>No hay compras registradas de "{{ datos.nombre_busqueda }}".</p>
+                </div>
+            </div>
+        {% endif %}
+    {% endif %}
+
+    <div class="form-actions">
+        <a href="{{ url_for('stats.dashboard') }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> Volver a Estadísticas
+        </a>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+{% if datos and datos.compras %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script>
+    const compras = {{ datos.compras | tojson }};
+    compras.reverse();  // cronológico (la consulta viene de más reciente a más antiguo)
+
+    new Chart(document.getElementById('graficoEvolucion'), {
+        type: 'line',
+        data: {
+            labels: compras.map(c => c.fecha_dia),
+            datasets: [{
+                label: 'Precio (€)',
+                data: compras.map(c => c.precio),
+                borderColor: 'rgba(75, 192, 192, 1)',
+                backgroundColor: 'rgba(75, 192, 192, 0.1)',
+                borderWidth: 3,
+                fill: true,
+                tension: 0.4,
+                pointRadius: 6,
+                pointHoverRadius: 8
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: { beginAtZero: true, title: { display: true, text: 'Precio (€)' } },
+                x: { title: { display: true, text: 'Fecha de compra' } }
+            },
+            plugins: {
+                tooltip: {
+                    callbacks: {
+                        label: function (c) {
+                            return [`Precio: ${c.parsed.y.toFixed(2)}€`, `Tienda: ${compras[c.dataIndex].tienda}`];
+                        }
+                    }
+                }
+            }
+        }
+    });
+</script>
+{% endif %}
+{% endblock %}

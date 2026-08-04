@@ -1,0 +1,25 @@
+# Entorno virtual
+venv/
+.venv/
+env/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Secretos y datos locales
+.env
+instance/
+*.db
+*.sqlite3
+
+# Datos antiguos (contienen información personal de tus compras)
+solocompras.json
+
+# Editores / Sistema operativo
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

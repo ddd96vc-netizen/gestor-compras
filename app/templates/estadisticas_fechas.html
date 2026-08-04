@@ -1,0 +1,166 @@
+{% extends "base.html" %}
+{% block title %}Estadísticas por Fechas · Gestor de Compras{% endblock %}
+
+{% block content %}
+
+<div class="stats-fechas-page">
+    <div class="page-header">
+        <h1><i class="fas fa-calendar-alt"></i> Análisis por Fechas</h1>
+        <p class="subtitle">Filtra tus gastos por período</p>
+    </div>
+
+    <!-- FORMULARIO -->
+    <div class="card">
+        <h2><i class="fas fa-filter"></i> Seleccionar Rango de Fechas</h2>
+
+        <form method="POST" action="{{ url_for('stats.fechas') }}" class="date-range-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="form-grid">
+                <div class="form-group">
+                    <label for="fecha_inicio"><i class="fas fa-calendar-day"></i> Fecha inicio:</label>
+                    <input type="date" id="fecha_inicio" name="fecha_inicio" required>
+                </div>
+                <div class="form-group">
+                    <label for="fecha_fin"><i class="fas fa-calendar-day"></i> Fecha fin:</label>
+                    <input type="date" id="fecha_fin" name="fecha_fin" required>
+                </div>
+            </div>
+            <button type="submit" class="btn btn-primary">
+                <i class="fas fa-calculator"></i> Calcular
+            </button>
+        </form>
+    </div>
+
+    <!-- RESULTADOS -->
+    {% if datos %}
+        <div class="stats-cards">
+            <div class="stat-card card-blue">
+                <div class="stat-icon"><i class="fas fa-receipt"></i></div>
+                <div class="stat-content">
+                    <h3>Tickets</h3>
+                    <p class="stat-number">{{ datos.num_tickets }}</p>
+                    <span class="stat-label">en este período</span>
+                </div>
+            </div>
+
+            <div class="stat-card card-green">
+                <div class="stat-icon"><i class="fas fa-euro-sign"></i></div>
+                <div class="stat-content">
+                    <h3>Total Gastado</h3>
+                    <p class="stat-number">{{ "%.2f"|format(datos.total) }}€</p>
+                    <span class="stat-label">{{ datos.fecha_inicio }} al {{ datos.fecha_fin }}</span>
+                </div>
+            </div>
+
+            <div class="stat-card card-purple">
+                <div class="stat-icon"><i class="fas fa-chart-line"></i></div>
+                <div class="stat-content">
+                    <h3>Promedio</h3>
+                    <p class="stat-number">{{ "%.2f"|format(datos.promedio) }}€</p>
+                    <span class="stat-label">por ticket</span>
+                </div>
+            </div>
+        </div>
+
+        {% if datos.tickets %}
+            <div class="card">
+                <h3><i class="fas fa-list"></i> Tickets en este Período ({{ datos.num_tickets }})</h3>
+
+                <div class="tickets-table-container">
+                    <table class="tickets-table">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th><i class="fas fa-store"></i> Tienda</th>
+                                <th><i class="fas fa-calendar"></i> Fecha</th>
+                                <th><i class="fas fa-shopping-basket"></i> Productos</th>
+                                <th><i class="fas fa-euro-sign"></i> Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for ticket in datos.tickets %}
+                            <tr>
+                                <td>{{ loop.index }}</td>
+                                <td><strong>{{ ticket.tienda }}</strong></td>
+                                <td>{{ ticket.fecha_dia }}</td>
+                                <td><span class="badge badge-info">{{ ticket.num_productos }} items</span></td>
+                                <td class="ticket-total">{{ "%.2f"|format(ticket.total) }}€</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                        <tfoot>
+                            <tr>
+                                <td colspan="4"><strong>TOTAL</strong></td>
+                                <td class="ticket-total"><strong>{{ "%.2f"|format(datos.total) }}€</strong></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3><i class="fas fa-chart-line"></i> Evolución de Gastos</h3>
+                <div class="chart-container" style="height: 400px;">
+                    <canvas id="graficoTemporal"></canvas>
+                </div>
+            </div>
+        {% else %}
+            <div class="card">
+                <div class="empty-state">
+                    <i class="fas fa-inbox"></i>
+                    <h3>No hay tickets en este rango</h3>
+                    <p>Prueba con otras fechas.</p>
+                </div>
+            </div>
+        {% endif %}
+    {% endif %}
+
+    <div class="form-actions">
+        <a href="{{ url_for('stats.dashboard') }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> Volver a Estadísticas
+        </a>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+{% if datos and datos.tickets %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script>
+    const ticketsRango = {{ datos.tickets | tojson }};
+    const porFecha = {};
+    ticketsRango.forEach(t => {
+        porFecha[t.fecha_dia] = (porFecha[t.fecha_dia] || 0) + t.total;
+    });
+    const fechas = Object.keys(porFecha).sort();
+
+    new Chart(document.getElementById('graficoTemporal'), {
+        type: 'line',
+        data: {
+            labels: fechas,
+            datasets: [{
+                label: 'Gasto diario (€)',
+                data: fechas.map(f => porFecha[f]),
+                borderColor: 'rgba(54, 162, 235, 1)',
+                backgroundColor: 'rgba(54, 162, 235, 0.1)',
+                borderWidth: 3,
+                fill: true,
+                tension: 0.4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: { beginAtZero: true, title: { display: true, text: 'Euros (€)' } },
+                x: { title: { display: true, text: 'Fecha' } }
+            },
+            plugins: {
+                tooltip: { callbacks: { label: c => `Gastado: ${c.parsed.y.toFixed(2)}€` } }
+            }
+        }
+    });
+</script>
+{% endif %}
+{% endblock %}

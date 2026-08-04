@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Gestor personal de compras: registra tickets, organiza productos por categoría y analiza tus gastos.">
+    <!-- Token CSRF: lo lee script.js para las peticiones a la API -->
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <title>{% block title %}Gestor de Compras{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+
+    <!-- BARRA DE NAVEGACIÓN -->
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="logo">
+                <a href="{{ url_for('tickets.index') }}">🛒 Gestor de Compras</a>
+            </div>
+
+            <button class="nav-toggle" id="navToggle" aria-label="Abrir menú" aria-expanded="false">
+                <i class="fas fa-bars"></i>
+            </button>
+
+            <ul class="nav-menu" id="navMenu">
+                <li><a href="{{ url_for('tickets.index') }}" class="nav-link"><i class="fas fa-home"></i> Inicio</a></li>
+                <li><a href="{{ url_for('tickets.nuevo_ticket') }}" class="nav-link"><i class="fas fa-plus-circle"></i> Nuevo Ticket</a></li>
+                <li><a href="{{ url_for('tickets.ver_tickets') }}" class="nav-link"><i class="fas fa-receipt"></i> Ver Tickets</a></li>
+                <li><a href="{{ url_for('tickets.buscar_producto') }}" class="nav-link"><i class="fas fa-search"></i> Buscar</a></li>
+                <li><a href="{{ url_for('favoritos.listado') }}" class="nav-link"><i class="fas fa-heart"></i> Favoritos</a></li>
+                <li><a href="{{ url_for('stats.categorias') }}" class="nav-link"><i class="fas fa-tags"></i> Categorías</a></li>
+                <li class="dropdown">
+                    <a href="#" class="nav-link dropdown-toggle">
+                        <i class="fas fa-chart-bar"></i> Estadísticas <i class="fas fa-chevron-down"></i>
+                    </a>
+                    <ul class="dropdown-menu">
+                        <li><a href="{{ url_for('stats.dashboard') }}"><i class="fas fa-chart-pie"></i> Dashboard</a></li>
+                        <li><a href="{{ url_for('stats.tiendas') }}"><i class="fas fa-store"></i> Por Tiendas</a></li>
+                        <li><a href="{{ url_for('stats.fechas') }}"><i class="fas fa-calendar"></i> Por Fechas</a></li>
+                        <li><a href="{{ url_for('stats.frecuencia') }}"><i class="fas fa-sync"></i> Frecuencia</a></li>
+                    </ul>
+                </li>
+
+                <li class="logout-item">
+                    <a href="{{ url_for('auth.logout') }}" class="nav-link logout-link">
+                        <i class="fas fa-sign-out-alt"></i> Cerrar Sesión
+                    </a>
+                </li>
+            </ul>
+        </div>
+    </nav>
+
+    <!-- MENSAJES FLASH -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            <div class="flash-messages">
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }}">
+                        <span class="alert-icon">
+                            {% if category == 'success' %}
+                                <i class="fas fa-check-circle"></i>
+                            {% elif category == 'error' %}
+                                <i class="fas fa-times-circle"></i>
+                            {% elif category == 'warning' %}
+                                <i class="fas fa-exclamation-triangle"></i>
+                            {% else %}
+                                <i class="fas fa-info-circle"></i>
+                            {% endif %}
+                        </span>
+                        {{ message }}
+                        <button class="alert-close" onclick="this.parentElement.remove()" aria-label="Cerrar aviso">&times;</button>
+                    </div>
+                {% endfor %}
+            </div>
+        {% endif %}
+    {% endwith %}
+
+    <!-- CONTENIDO PRINCIPAL -->
+    <main class="main-content">
+        <div class="container">
+            {% block content %}{% endblock %}
+        </div>
+    </main>
+
+    <!-- FOOTER -->
+    <footer class="footer">
+        <div class="container">
+            <p>© 2025 Gestor de Compras · Hecho con Flask</p>
+        </div>
+    </footer>
+
+    <script src="{{ url_for('static', filename='js/script.js') }}"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

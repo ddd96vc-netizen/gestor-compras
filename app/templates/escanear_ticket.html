@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Escanear Ticket · Gestor de Compras{% endblock %}
+
+{% block content %}
+<div class="form-page">
+    <div class="page-header">
+        <h1><i class="fas fa-camera"></i> Escanear Ticket</h1>
+        <p class="subtitle">Sube una foto y rellenamos el ticket por ti</p>
+    </div>
+
+    <div class="card">
+        <form method="POST" action="{{ url_for('escaneo.desde_foto') }}" enctype="multipart/form-data">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <div class="form-group">
+                <label for="foto"><i class="fas fa-image"></i> Foto del ticket</label>
+                <input type="file" id="foto" name="foto"
+                       accept="image/*" capture="environment" required>
+                <p class="subtitle" style="margin-top: 0.5rem;">
+                    Enfoca el ticket con buena luz y sin sombras. Cuanto más nítida
+                    la foto, mejor se leerá.
+                </p>
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary btn-lg">
+                    <i class="fas fa-magic"></i> Leer ticket
+                </button>
+                <a href="{{ url_for('tickets.nuevo_ticket') }}" class="btn btn-secondary btn-lg">
+                    <i class="fas fa-keyboard"></i> Rellenar a mano
+                </a>
+            </div>
+        </form>
+    </div>
+
+    <div class="card">
+        <p><i class="fas fa-info-circle"></i>
+            Tras leer la foto verás el formulario ya rellenado para que
+            <strong>revises y corrijas</strong> antes de guardar. La primera lectura
+            puede tardar un poco más mientras se prepara el lector.
+        </p>
+    </div>
+</div>
+{% endblock %}

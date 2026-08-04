@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block title %}Detalle del Ticket · Gestor de Compras{% endblock %}
+
+{% block content %}
+
+<div class="ticket-detail-page">
+    <div class="page-header">
+        <h1><i class="fas fa-receipt"></i> Detalle del Ticket</h1>
+    </div>
+
+    <!-- INFORMACIÓN DEL TICKET -->
+    <div class="card">
+        <div class="ticket-header-info">
+            <div class="ticket-main-info">
+                <h2><i class="fas fa-store"></i> {{ ticket.tienda }}</h2>
+                <p class="ticket-id">ID: {{ ticket.id }}</p>
+            </div>
+            <div class="ticket-meta">
+                <p><i class="fas fa-calendar"></i> {{ ticket.fecha }}</p>
+                <p class="total-display-large">
+                    <i class="fas fa-euro-sign"></i> {{ "%.2f"|format(ticket.total) }}€
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- PRODUCTOS -->
+    <div class="card">
+        <h3><i class="fas fa-shopping-basket"></i> Productos ({{ ticket.num_productos }})</h3>
+
+        <div class="tickets-table-container">
+            <table class="tickets-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Producto</th>
+                        <th>Cantidad</th>
+                        <th>Precio</th>
+                        <th>Importe</th>
+                        <th>Categoría</th>
+                        <th>Observación</th>
+                        <th><i class="fas fa-heart"></i></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for prod in ticket.productos %}
+                    <tr>
+                        <td>{{ loop.index }}</td>
+                        <td><strong>{{ prod.nombre }}</strong></td>
+                        <td>{{ prod.cantidad }}</td>
+                        <td>{{ "%.2f"|format(prod.precio) }}€</td>
+                        <td class="ticket-total">{{ "%.2f"|format(prod.importe) }}€</td>
+                        <td>
+                            {% if prod.categoria %}
+                                <span class="badge badge-info">{{ prod.categoria }}</span>
+                            {% else %}
+                                <span class="badge">Sin categoría</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ prod.observacion or '-' }}</td>
+                        <td>
+                            <button type="button" class="btn-favorito {% if prod.favorito %}activo{% endif %}"
+                                    data-favorito data-nombre="{{ prod.nombre }}"
+                                    aria-pressed="{{ 'true' if prod.favorito else 'false' }}"
+                                    title="{{ 'Quitar de favoritos' if prod.favorito else 'Añadir a favoritos' }}">
+                                <i class="{{ 'fas' if prod.favorito else 'far' }} fa-heart"></i>
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <td colspan="4"><strong>TOTAL</strong></td>
+                        <td colspan="4" class="ticket-total">
+                            <strong>{{ "%.2f"|format(ticket.total) }}€</strong>
+                        </td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+
+    <!-- ACCIONES -->
+    <div class="form-actions">
+        <a href="{{ url_for('tickets.editar', ticket_id=ticket.id) }}" class="btn btn-primary">
+            <i class="fas fa-edit"></i> Editar Ticket
+        </a>
+        <button type="button" class="btn btn-danger"
+                data-eliminar data-id="{{ ticket.id }}" data-tienda="{{ ticket.tienda }}">
+            <i class="fas fa-trash"></i> Eliminar Ticket
+        </button>
+        <a href="{{ url_for('tickets.ver_tickets') }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> Volver a Tickets
+        </a>
+    </div>
+</div>
+
+{% endblock %}

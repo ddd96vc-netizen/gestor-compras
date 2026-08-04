@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Página no encontrada · Gestor de Compras{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="empty-state">
+        <i class="fas fa-map-signs"></i>
+        <h2>Esta página no existe</h2>
+        <p>El enlace que has seguido no lleva a ninguna parte. Vuelve al inicio para seguir.</p>
+        <a href="{{ url_for('tickets.index') }}" class="btn btn-primary">
+            <i class="fas fa-home"></i> Ir al Inicio
+        </a>
+    </div>
+</div>
+{% endblock %}

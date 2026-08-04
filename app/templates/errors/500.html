@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Error del servidor · Gestor de Compras{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="empty-state">
+        <i class="fas fa-bug"></i>
+        <h2>Algo ha fallado en el servidor</h2>
+        <p>No hemos podido completar la operación. Inténtalo de nuevo en un momento.</p>
+        <a href="{{ url_for('tickets.index') }}" class="btn btn-primary">
+            <i class="fas fa-home"></i> Volver al Inicio
+        </a>
+    </div>
+</div>
+{% endblock %}

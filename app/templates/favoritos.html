@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Favoritos · Gestor de Compras{% endblock %}
+
+{% block content %}
+
+<div class="favoritos-page">
+    <div class="page-header">
+        <h1><i class="fas fa-heart"></i> Productos Favoritos</h1>
+        <p class="subtitle">Los productos que has marcado, para saber dónde comprarlos</p>
+    </div>
+
+    {% if favoritos %}
+    <div class="favoritos-grid">
+        {% for fav in favoritos %}
+        <div class="favorito-card">
+            <div class="favorito-card-header">
+                <h3><i class="fas fa-shopping-basket"></i> {{ fav.nombre }}</h3>
+                <button type="button" class="btn-favorito activo"
+                        data-favorito data-nombre="{{ fav.nombre }}"
+                        aria-pressed="true" title="Quitar de favoritos">
+                    <i class="fas fa-heart"></i>
+                </button>
+            </div>
+
+            <div class="favorito-card-datos">
+                <span><i class="fas fa-shopping-cart"></i> Comprado {{ fav.veces }} {{ 'vez' if fav.veces == 1 else 'veces' }}</span>
+                {% if fav.precio_min is not none %}
+                <span><i class="fas fa-tag"></i> Desde {{ "%.2f"|format(fav.precio_min) }}€</span>
+                {% endif %}
+                {% if fav.ultima_fecha %}
+                <span><i class="fas fa-calendar"></i> Última: {{ fav.ultima_fecha }}</span>
+                {% endif %}
+            </div>
+
+            <a href="{{ url_for('favoritos.detalle', nombre=fav.nombre) }}" class="btn btn-primary btn-sm">
+                <i class="fas fa-eye"></i> Ver dónde comprarlo
+            </a>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="card">
+        <div class="empty-state">
+            <i class="far fa-heart"></i>
+            <h2>Todavía no tienes favoritos</h2>
+            <p>Pulsa el corazón en cualquier producto (al ver un ticket o al buscar) para añadirlo aquí.</p>
+            <a href="{{ url_for('tickets.buscar_producto') }}" class="btn btn-primary">
+                <i class="fas fa-search"></i> Buscar productos
+            </a>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+{% endblock %}

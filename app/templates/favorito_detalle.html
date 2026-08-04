@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+{% block title %}{{ nombre }} · Favoritos{% endblock %}
+
+{% block content %}
+
+<div class="favorito-detalle-page">
+    <div class="page-header">
+        <div>
+            <h1><i class="fas fa-shopping-basket"></i> {{ nombre }}</h1>
+            <p class="subtitle">Historial de compras y dónde encontrarlo</p>
+        </div>
+        <button type="button" class="btn-favorito activo" data-favorito data-nombre="{{ nombre }}"
+                aria-pressed="true" title="Quitar de favoritos" style="font-size: 1.8rem;">
+            <i class="fas fa-heart"></i>
+        </button>
+    </div>
+
+    {% if datos.compras %}
+        <!-- DÓNDE MÁS BARATO -->
+        <div class="card highlight-card-green">
+            <div class="highlight-content">
+                <div class="trophy-icon">💰</div>
+                <div>
+                    <h3>Dónde comprarlo más barato</h3>
+                    <p class="store-name">{{ datos.tienda_mas_barata.nombre }}</p>
+                    <p class="store-amount">Precio medio: {{ "%.2f"|format(datos.tienda_mas_barata.promedio) }}€</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- RESUMEN -->
+        <div class="stats-cards">
+            <div class="stat-card card-blue">
+                <div class="stat-icon"><i class="fas fa-shopping-cart"></i></div>
+                <div class="stat-content">
+                    <h3>Veces comprado</h3>
+                    <p class="stat-number">{{ datos.frecuencia }}</p>
+                    <span class="stat-label">en total</span>
+                </div>
+            </div>
+            <div class="stat-card card-green">
+                <div class="stat-icon"><i class="fas fa-tag"></i></div>
+                <div class="stat-content">
+                    <h3>Precio más bajo</h3>
+                    <p class="stat-number">{{ "%.2f"|format(datos.precio_minimo) }}€</p>
+                    <span class="stat-label">unitario</span>
+                </div>
+            </div>
+            <div class="stat-card card-purple">
+                <div class="stat-icon"><i class="fas fa-chart-line"></i></div>
+                <div class="stat-content">
+                    <h3>Rango de precios</h3>
+                    <p class="stat-number">{{ "%.2f"|format(datos.precio_minimo) }} - {{ "%.2f"|format(datos.precio_maximo) }}€</p>
+                    <span class="stat-label">diferencia: {{ "%.2f"|format(datos.diferencia) }}€</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- COMPARATIVA POR TIENDA -->
+        <div class="card">
+            <h3><i class="fas fa-balance-scale"></i> Precio por Tienda</h3>
+            <div class="tickets-table-container">
+                <table class="tickets-table">
+                    <thead>
+                        <tr>
+                            <th><i class="fas fa-store"></i> Tienda</th>
+                            <th><i class="fas fa-shopping-cart"></i> Veces</th>
+                            <th><i class="fas fa-euro-sign"></i> Precio medio</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for tienda in datos.tiendas_distintas %}
+                        <tr>
+                            <td><strong>{{ tienda }}</strong></td>
+                            <td><span class="badge badge-info">{{ datos.compras|selectattr('tienda', 'equalto', tienda)|list|length }}</span></td>
+                            <td class="ticket-total">{{ "%.2f"|format(datos.promedios_tiendas[tienda]) }}€</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- HISTORIAL -->
+        <div class="card">
+            <h3><i class="fas fa-history"></i> Historial Completo</h3>
+            <div class="tickets-table-container">
+                <table class="tickets-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th><i class="fas fa-calendar"></i> Fecha</th>
+                            <th><i class="fas fa-store"></i> Tienda</th>
+                            <th>Cant.</th>
+                            <th><i class="fas fa-euro-sign"></i> Precio</th>
+                            <th><i class="fas fa-tag"></i> Categoría</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for compra in datos.compras %}
+                        <tr>
+                            <td>{{ loop.index }}</td>
+                            <td>{{ compra.fecha_dia }}</td>
+                            <td>{{ compra.tienda }}</td>
+                            <td>{{ compra.cantidad }}</td>
+                            <td class="ticket-total">{{ "%.2f"|format(compra.precio) }}€</td>
+                            <td>
+                                {% if compra.categoria and compra.categoria != 'Sin categoría' %}
+                                    <span class="badge badge-info">{{ compra.categoria }}</span>
+                                {% else %}
+                                    <span class="badge">Sin categoría</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    {% else %}
+        <div class="card">
+            <div class="empty-state">
+                <i class="fas fa-inbox"></i>
+                <h2>Sin compras registradas</h2>
+                <p>No hay compras de "{{ nombre }}" en tus tickets.</p>
+            </div>
+        </div>
+    {% endif %}
+
+    <div class="form-actions">
+        <a href="{{ url_for('favoritos.listado') }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> Volver a Favoritos
+        </a>
+    </div>
+</div>
+
+{% endblock %}

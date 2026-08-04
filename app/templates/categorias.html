@@ -1,0 +1,236 @@
+{% extends "base.html" %}
+{% block title %}Categorías · Gestor de Compras{% endblock %}
+
+{% block content %}
+
+<div class="categorias-page">
+    <div class="page-header">
+        <h1><i class="fas fa-tags"></i> Gestión de Categorías</h1>
+        <p class="subtitle">Organiza tus productos por categorías</p>
+    </div>
+
+    {% if stats %}
+        <div class="card">
+            <h2><i class="fas fa-chart-pie"></i> Resumen de Categorías</h2>
+            <p>Total de categorías: <strong>{{ stats|length }}</strong></p>
+        </div>
+
+        <div class="card">
+            <h3><i class="fas fa-list"></i> Detalles por Categoría</h3>
+
+            <div class="tickets-table-container">
+                <table class="tickets-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th><i class="fas fa-tag"></i> Categoría</th>
+                            <th><i class="fas fa-shopping-basket"></i> Productos</th>
+                            <th><i class="fas fa-euro-sign"></i> Total Gastado</th>
+                            <th>Promedio</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for categoria, data in stats.items() %}
+                        <tr>
+                            <td>{{ loop.index }}</td>
+                            <td><strong>{{ categoria }}</strong></td>
+                            <td>
+                                <a href="#" class="productos-link" data-categoria="{{ categoria }}">
+                                    <i class="fas fa-eye"></i> {{ data.cantidad }} items
+                                </a>
+                            </td>
+                            <td class="ticket-total">{{ "%.2f"|format(data.total) }}€</td>
+                            <td>{{ "%.2f"|format(data.total / data.cantidad) }}€</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                    <tfoot>
+                        <tr>
+                            <td colspan="2"><strong>TOTAL</strong></td>
+                            <td><strong>{{ stats.values()|sum(attribute='cantidad') }} items</strong></td>
+                            <td class="ticket-total"><strong>{{ "%.2f"|format(stats.values()|sum(attribute='total')) }}€</strong></td>
+                            <td>-</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+
+        <div class="card">
+            <h3><i class="fas fa-chart-bar"></i> Distribución de Gastos</h3>
+            <div class="chart-container" style="height: 400px;">
+                <canvas id="graficoCategorias"></canvas>
+            </div>
+        </div>
+    {% else %}
+        <div class="card">
+            <div class="empty-state">
+                <i class="fas fa-inbox"></i>
+                <h2>No hay categorías definidas</h2>
+                <p>Empieza a categorizar tus productos al crear tickets.</p>
+                <a href="{{ url_for('tickets.nuevo_ticket') }}" class="btn btn-primary">
+                    <i class="fas fa-plus"></i> Crear Ticket
+                </a>
+            </div>
+        </div>
+    {% endif %}
+
+    <div class="form-actions">
+        <a href="{{ url_for('tickets.index') }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> Volver al Inicio
+        </a>
+    </div>
+</div>
+
+<!-- MODAL -->
+<div id="modalProductos" class="modal">
+    <div class="modal-content">
+        <button type="button" class="modal-cerrar" data-cerrar-modal aria-label="Cerrar">&times;</button>
+        <h2 class="modal-titulo" id="tituloCategoria"><i class="fas fa-tag"></i> Productos</h2>
+
+        <div id="loadingProductos" style="text-align: center; padding: 2rem;">
+            <i class="fas fa-spinner fa-spin" style="font-size: 3rem;"></i>
+            <p>Cargando productos...</p>
+        </div>
+
+        <div id="contenidoProductos" style="display: none;">
+            <div class="tickets-table-container">
+                <table class="tickets-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th><i class="fas fa-shopping-basket"></i> Producto</th>
+                            <th>Cant.</th>
+                            <th><i class="fas fa-euro-sign"></i> Precio</th>
+                            <th>Importe</th>
+                            <th><i class="fas fa-store"></i> Tienda</th>
+                            <th><i class="fas fa-calendar"></i> Fecha</th>
+                            <th><i class="fas fa-comment"></i> Observación</th>
+                        </tr>
+                    </thead>
+                    <tbody id="bodyProductos"></tbody>
+                </table>
+            </div>
+            <div style="margin-top: 1rem; padding: 1rem; background: #f5f7fa; border-radius: 8px;">
+                <strong>Total de productos:</strong> <span id="totalProductos">0</span>
+            </div>
+        </div>
+
+        <div id="errorProductos" style="display: none; padding: 2rem; text-align: center; color: var(--danger-color);">
+            <i class="fas fa-exclamation-triangle" style="font-size: 3rem;"></i>
+            <p id="mensajeError">Error al cargar productos</p>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+{% if stats %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script>
+    const categorias = {{ stats.keys()|list|tojson }};
+    const totales = {{ stats.values()|map(attribute='total')|list|tojson }};
+
+    new Chart(document.getElementById('graficoCategorias'), {
+        type: 'bar',
+        data: {
+            labels: categorias,
+            datasets: [{
+                label: 'Total gastado (€)',
+                data: totales,
+                backgroundColor: [
+                    'rgba(54, 162, 235, 0.7)', 'rgba(255, 99, 132, 0.7)',
+                    'rgba(255, 206, 86, 0.7)', 'rgba(75, 192, 192, 0.7)',
+                    'rgba(153, 102, 255, 0.7)', 'rgba(255, 159, 64, 0.7)',
+                    'rgba(201, 203, 207, 0.7)',
+                ],
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: { y: { beginAtZero: true } },
+            plugins: { legend: { display: false } }
+        }
+    });
+</script>
+{% endif %}
+<script>
+    const modalCat = document.getElementById('modalProductos');
+
+    function cerrarModalCat() { modalCat.classList.remove('abierto'); }
+
+    document.querySelectorAll('[data-categoria]').forEach(enlace => {
+        enlace.addEventListener('click', function (e) {
+            e.preventDefault();
+            mostrarProductos(this.dataset.categoria);
+        });
+    });
+    document.querySelectorAll('[data-cerrar-modal]').forEach(b => b.addEventListener('click', cerrarModalCat));
+    modalCat.addEventListener('click', e => { if (e.target === modalCat) cerrarModalCat(); });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') cerrarModalCat(); });
+
+    function mostrarProductos(categoria) {
+        const titulo = document.getElementById('tituloCategoria');
+        const loading = document.getElementById('loadingProductos');
+        const contenido = document.getElementById('contenidoProductos');
+        const errorDiv = document.getElementById('errorProductos');
+        const body = document.getElementById('bodyProductos');
+
+        titulo.textContent = `Productos de: ${categoria}`;
+        modalCat.classList.add('abierto');
+        loading.style.display = 'block';
+        contenido.style.display = 'none';
+        errorDiv.style.display = 'none';
+        body.innerHTML = '';
+
+        fetch(`/api/productos_categoria/${encodeURIComponent(categoria)}`)
+            .then(r => { if (!r.ok) throw new Error('Error en la respuesta del servidor'); return r.json(); })
+            .then(data => {
+                if (data.success && data.productos.length > 0) {
+                    data.productos.forEach((p, i) => body.appendChild(crearFila(p, i + 1)));
+                    document.getElementById('totalProductos').textContent = data.productos.length;
+                    loading.style.display = 'none';
+                    contenido.style.display = 'block';
+                } else {
+                    throw new Error('No se encontraron productos en esta categoría');
+                }
+            })
+            .catch(err => {
+                loading.style.display = 'none';
+                errorDiv.style.display = 'block';
+                document.getElementById('mensajeError').textContent = err.message;
+            });
+    }
+
+    // Construye la fila con textContent (no innerHTML) para evitar inyección.
+    function crearFila(producto, indice) {
+        const fila = document.createElement('tr');
+        const celdas = [
+            String(indice),
+            producto.nombre,
+            String(producto.cantidad),
+            `${producto.precio.toFixed(2)}€`,
+            `${producto.importe.toFixed(2)}€`,
+            producto.tienda,
+            producto.fecha_dia,
+            producto.observacion || '-',
+        ];
+        celdas.forEach((valor, col) => {
+            const td = document.createElement('td');
+            if (col === 1) {
+                const strong = document.createElement('strong');
+                strong.textContent = valor;
+                td.appendChild(strong);
+            } else {
+                td.textContent = valor;
+                if (col === 4) td.className = 'ticket-total';
+            }
+            fila.appendChild(td);
+        });
+        return fila;
+    }
+</script>
+{% endblock %}

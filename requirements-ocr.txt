@@ -1,0 +1,11 @@
+# Dependencias del escaneo de tickets por foto (OCR).
+#
+# Son PESADAS (EasyOCR arrastra PyTorch, ~cientos de MB), por eso van aparte
+# del requirements.txt principal. Instálalas SOLO si vas a usar el escaneo:
+#
+#     pip install -r requirements-ocr.txt
+#
+# La primera vez que escanees, EasyOCR descargará su modelo de español (~64 MB).
+
+easyocr>=1.7,<2.0
+Pillow>=10.0

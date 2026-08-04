@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Demasiados intentos · Gestor de Compras{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="empty-state">
+        <i class="fas fa-hourglass-half"></i>
+        <h2>Demasiados intentos seguidos</h2>
+        <p>Has hecho muchas peticiones en poco tiempo. Espera un minuto y vuelve a intentarlo.</p>
+        {% if descripcion %}<p><small>{{ descripcion }}</small></p>{% endif %}
+        <a href="{{ url_for('tickets.index') }}" class="btn btn-primary">
+            <i class="fas fa-home"></i> Volver al Inicio
+        </a>
+    </div>
+</div>
+{% endblock %}

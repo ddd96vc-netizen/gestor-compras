@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Acceder · Gestor de Compras</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        .login-body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 1rem;
+        }
+        .login-container {
+            background: white;
+            padding: 3rem 2rem;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            width: 100%;
+            max-width: 400px;
+            text-align: center;
+        }
+        .login-icon { font-size: 4rem; color: #667eea; margin-bottom: 1rem; }
+        .login-container h1 { color: #333; margin-bottom: 0.5rem; font-size: 1.8rem; }
+        .login-container .subtitle { color: #666; margin-bottom: 2rem; font-size: 0.9rem; }
+        .login-container .form-group { margin-bottom: 1.5rem; text-align: left; }
+        .login-container label { display: block; margin-bottom: 0.5rem; color: #555; font-weight: 600; }
+        .login-container input[type="password"] {
+            width: 100%;
+            padding: 1rem;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+        }
+        .login-container input[type="password"]:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        .btn-login {
+            width: 100%;
+            padding: 1rem;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .btn-login:hover { transform: translateY(-2px); box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3); }
+        .login-container .flash-messages { position: static; max-width: none; margin-bottom: 1.5rem; }
+        .login-container .alert { text-align: left; }
+        .security-info {
+            margin-top: 2rem;
+            padding: 1rem;
+            background: #f5f7fa;
+            border-radius: 10px;
+            font-size: 0.85rem;
+            color: #666;
+        }
+        .security-info i { color: var(--primary-color); margin-right: 0.5rem; }
+        @media (max-width: 480px) {
+            .login-container { padding: 2rem 1.5rem; }
+        }
+    </style>
+</head>
+<body class="login-body">
+    <div class="login-container">
+        <div class="login-icon"><i class="fas fa-lock"></i></div>
+
+        <h1>Gestor de Compras</h1>
+        <p class="subtitle">Acceso restringido · Privado</p>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div class="flash-messages">
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category }}">{{ message }}</div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+
+        <form method="POST" action="{{ url_for('auth.login') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="form-group">
+                <label for="password"><i class="fas fa-key"></i> Contraseña de acceso</label>
+                <input type="password" id="password" name="password"
+                       placeholder="Introduce tu contraseña"
+                       required autofocus autocomplete="current-password">
+            </div>
+
+            <button type="submit" class="btn-login">
+                <i class="fas fa-sign-in-alt"></i> Acceder
+            </button>
+        </form>
+
+        <div class="security-info">
+            <i class="fas fa-shield-alt"></i>
+            Conexión protegida con sesión cifrada
+        </div>
+    </div>
+</body>
+</html>
