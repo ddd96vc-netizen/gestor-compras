@@ -130,7 +130,7 @@ def _registrar_manejadores_error(app):
 
     @app.errorhandler(413)
     def imagen_demasiado_grande(e):
-        flash("La imagen es demasiado grande (máximo 10 MB).", "error")
+        flash("La imagen es demasiado grande (máximo 20 MB).", "error")
         return redirect(request.referrer or url_for("escaneo.desde_foto"))
 
     @app.errorhandler(CSRFError)

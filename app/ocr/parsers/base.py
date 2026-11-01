@@ -1,8 +1,8 @@
 """
 base.py - Clase base de los parsers de tickets
 ==============================================
-Contiene la lógica genérica de extracción (fecha, precios, productos) y
-las utilidades compartidas. Cada tienda concreta hereda de `ParserTicket`
+Contiene la lógica genérica de extracción (fecha, precios, productos, total)
+y las utilidades compartidas. Cada tienda concreta hereda de `ParserTicket`
 y sobreescribe solo lo que necesite.
 
 Todo esto trabaja sobre TEXTO ya extraído por el OCR: no depende de ninguna
@@ -14,12 +14,28 @@ from datetime import datetime
 
 
 # --- Expresiones regulares reutilizables ---
-# Tolerante a espacios sueltos que a veces mete el OCR: "1 ,16" también cuenta.
-RE_PRECIO = re.compile(r"(\d{1,4}\s*[.,]\s*\d{2})\b")     # 1,20 · 1.20 · 1 ,16
-RE_FECHA = re.compile(r"(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{2,4})")   # 07/12/2025
-RE_HORA = re.compile(r"\b(\d{1,2}):(\d{2})\b")           # 21:28
-RE_CANTIDAD_PREFIJO = re.compile(r"^\s*(\d{1,3})\s*[xX*]\s*")   # "3 x ..."  ·  "2x ..."
-RE_CANTIDAD_COLUMNA = re.compile(r"(?<!\d)(\d{1,3})\s*$")       # entero suelto al final
+# Separador decimal: coma o punto, y también los que usan algunos tickets o
+# que el OCR confunde con ellos: apóstrofo (Deza/Zoco imprime "1'24"),
+# acento agudo o asterisco ("1*05"). Tolera espacios sueltos: "1 ,16", "0' 24".
+SEP_DECIMAL = r"[.,'´`*]"
+# No cuenta si va seguido de una unidad: "1.25 L", "0,33 CL" son tamaños, no precios.
+RE_PRECIO = re.compile(
+    rf"(?<![\d.,])(\d{{1,4}}\s*{SEP_DECIMAL}\s*\d{{2}})(?!\d)(?!\s*(?:L|ML|CL|KG|GR?)\b)",
+    re.IGNORECASE,
+)
+RE_FECHA = re.compile(r"(\d{1,2})\s*[/\-.]\s*\*?(\d{1,2})\s*[/\-.]\s*\*?(\d{4}|\d{2})(?!\d)")
+RE_HORA = re.compile(r"(?<!\d)([01]?\d|2[0-3])\s?[:;]\s?([0-5]\d)(?!\d)")   # 21:28 · 17;07 · 14: 13
+RE_CANTIDAD_PREFIJO = re.compile(r"^\s*(\d{1,3})\s*[xX*]\s+")   # "3 x ..."  ·  "2x ..."
+RE_CANTIDAD_COLUMNA = re.compile(r"(?<![\d.,'])(\d{1,3})\s*$")  # entero suelto al final
+# Peso con 1 o 3 decimales justo antes de los precios ("1'5", "0,456"): producto al peso.
+RE_PESO = re.compile(rf"(?<![\d.,'])(\d{{1,2}}{SEP_DECIMAL}(?:\d|\d{{3}}))\s*$")
+# Precio partido por el OCR que ha perdido la coma: "1 89" -> "1,89".
+RE_PRECIO_PARTIDO = re.compile(r"(?<![\d.,'*])(\d{1,3}) (\d{2})(?![\d.,'*])")
+RE_TOTAL = re.compile(r"\bTOT[A-Z0-9\]\)|]*|\bPAGADO\b|\bA PAGAR\b", re.IGNORECASE)
+
+# Sin columna de importe que lo confirme, un entero mayor que esto delante del
+# precio casi nunca es una cantidad (suele ser un trozo del precio mal leído).
+CANTIDAD_MAX_SIN_IMPORTE = 10
 
 # Palabras que NO son productos (líneas a ignorar del ticket).
 PALABRAS_RUIDO = {
@@ -28,19 +44,32 @@ PALABRAS_RUIDO = {
     "GRACIAS", "VISA", "MASTERCARD", "FACTURA", "TELEFONO", "TEL",
     "DEVOLUCION", "CUOTA", "ARTICULOS", "UNIDADES", "OPERACION", "IMPORTE",
     "AUTORIZACION", "COMERCIO", "TERMINAL", "APROBADA", "AHORRO", "REDONDEO",
-    "PAGO", "CONTADO", "WWW", "HTTP", "PVP",
+    "PAGO", "CONTADO", "WWW", "HTTP", "PVP", "PAGADO", "DEVUELTO", "DESGLOSE",
+    "DESCRIPCION", "DESCR", "CANTIDAD", "INPORTE", "DOMICILIO",
 }
 
 
+# Una palabra de ruido solo cuenta como palabra completa: "TEL" no debe
+# descartar "BOTELLA", pero sí "TEL: 957..." o "IVA10%".
+RE_RUIDO = re.compile(
+    r"(?<![A-Z])(?:" + "|".join(sorted((re.escape(p) for p in PALABRAS_RUIDO), key=len, reverse=True)) + r")(?![A-Z])"
+)
+
+
 def parsear_euros(texto: str) -> float:
-    """Convierte '1,20' / '1.20' / '1 ,16' / '1.234,56' a float (formato español)."""
-    texto = texto.strip().replace(" ", "")
+    """Convierte '1,20' / '1.20' / '1 ,16' / "1'24" / '1.234,56' a float (formato español)."""
+    texto = re.sub(r"[\s]", "", texto.strip())
+    texto = re.sub(r"['´`*]", ",", texto)       # separadores raros -> coma decimal
     if "," in texto and "." in texto:          # 1.234,56 -> el punto es de miles
         texto = texto.replace(".", "").replace(",", ".")
     elif "," in texto:                          # 1,20 -> coma decimal
         texto = texto.replace(",", ".")
     # si solo hay ".", se asume que ya es el decimal
     return round(float(texto), 2)
+
+
+def formato_euros(valor: float) -> str:
+    return f"{valor:.2f}".replace(".", ",")
 
 
 class ParserTicket:
@@ -61,6 +90,7 @@ class ParserTicket:
             "tienda": self.extraer_tienda(texto, lineas),
             "fecha": self.extraer_fecha(texto),
             "productos": self.extraer_productos(lineas),
+            "total": self.extraer_total(lineas),
         }
 
     # --- Utilidades ---
@@ -69,8 +99,25 @@ class ParserTicket:
         return [linea.strip() for linea in texto.splitlines() if linea.strip()]
 
     def es_linea_ruido(self, linea: str) -> bool:
-        mayus = linea.upper()
-        return any(palabra in mayus for palabra in PALABRAS_RUIDO)
+        return bool(RE_RUIDO.search(linea.upper()))
+
+    def es_linea_total(self, linea: str) -> bool:
+        return bool(RE_TOTAL.search(linea)) and not re.search(r"SUB-?TOTAL", linea, re.I)
+
+    @staticmethod
+    def reparar_numeros(linea: str) -> str:
+        """Arregla precios que el OCR partió en la cola numérica de la línea.
+
+        Solo toca la parte final (tras la última letra), donde están las
+        columnas de cantidad/precio/importe, para no alterar el nombre
+        ("PACK 6 33CL" se queda como está).
+        """
+        corte = 0   # posición justo después de la última letra
+        for m in re.finditer(r"[^\W\d_]", linea):
+            corte = m.end()
+        nombre, cola = linea[:corte], linea[corte:]
+        cola = RE_PRECIO_PARTIDO.sub(r"\1,\2", cola)
+        return nombre + cola
 
     # --- Extractores (sobreescribibles por cada tienda) ---
 
@@ -80,96 +127,148 @@ class ParserTicket:
             return self.nombre_tienda
         for linea in lineas[:6]:
             letras = sum(1 for c in linea if c.isalpha())
-            if letras >= 3 and not RE_FECHA.search(linea):
+            visibles = sum(1 for c in linea if not c.isspace())
+            # Mayoría de letras: descarta cabeceras ilegibles ("Us Tf 82105 3848 Du J ,L").
+            if (letras >= 4 and letras / visibles >= 0.6
+                    and not RE_FECHA.search(linea) and not RE_PRECIO.search(linea)):
                 return linea.title()
         return ""
 
     def extraer_fecha(self, texto: str) -> str:
         """Devuelve la fecha en formato 'YYYY-MM-DDTHH:MM' (para el <input>)."""
-        mf = RE_FECHA.search(texto)
-        if not mf:
-            return ""
-        dia, mes, anio = mf.groups()
-        if len(anio) == 2:
-            anio = "20" + anio
-        try:
-            fecha = datetime(int(anio), int(mes), int(dia))
-        except ValueError:
-            return ""
-        dia_iso = fecha.strftime("%Y-%m-%d")
+        for mf in RE_FECHA.finditer(texto):
+            dia, mes, anio = mf.groups()
+            if len(anio) == 2:
+                anio = "20" + anio
+            try:
+                fecha = datetime(int(anio), int(mes), int(dia))
+            except ValueError:
+                continue
+            if not 2000 <= fecha.year <= 2099:
+                continue
+            dia_iso = fecha.strftime("%Y-%m-%d")
 
-        mh = RE_HORA.search(texto)
-        if mh:
-            hora, minuto = mh.groups()
-            return f"{dia_iso}T{int(hora):02d}:{minuto}"
-        return f"{dia_iso}T00:00"
+            # La hora suele ir justo detrás de la fecha (o en la línea siguiente).
+            mh = RE_HORA.search(texto, mf.end()) or RE_HORA.search(texto)
+            if mh:
+                hora, minuto = mh.groups()
+                return f"{dia_iso}T{int(hora):02d}:{minuto}"
+            return f"{dia_iso}T00:00"
+        return ""
+
+    def extraer_total(self, lineas: list):
+        """Total impreso en el ticket (para comprobar la lectura), o None."""
+        for linea in lineas:
+            if not self.es_linea_total(linea):
+                continue
+            precios = RE_PRECIO.findall(self.reparar_numeros(linea))
+            if precios:
+                return max(parsear_euros(p) for p in precios)
+        return None
 
     def extraer_productos(self, lineas: list) -> list:
-        """Extrae [{nombre, precio, cantidad}] de las líneas que parezcan productos.
+        """Extrae [{nombre, precio, cantidad, importe, observacion}] de las líneas de producto.
 
         Modelo de 4 columnas (el formato habitual de super/tienda):
 
             NOMBRE  ·  CANTIDAD  ·  PRECIO UNITARIO  ·  IMPORTE TOTAL
             Salchicha PK-4    1        2,45              2,45
             Estrella Sur      2        0,58              1,16
+            Muslos de pollo   1'5      4'50              6,91     <- al peso
 
-        También reconoce el formato "prefijo" ("2 x Pilas AA   3,00"), por si
-        algún ticket lo trae así.
+        También reconoce el formato "prefijo" ("2 x Pilas AA   3,00").
 
-        Autocorrección: cuando hay columna de IMPORTE, se usa para comprobar
-        que cantidad × precio cuadra. Si no cuadra (p. ej. el OCR "perdió" el
-        dígito de la cantidad), se recalcula la cantidad a partir del importe,
-        que suele leerse mejor por ser el número más grande y más a la derecha.
+        Autocorrección con la columna de IMPORTE (si existe):
+          - Si importe = N × precio, la cantidad es N (aunque el OCR haya
+            perdido el dígito de la cantidad).
+          - Si no es un múltiplo exacto, es un producto al peso (o con
+            descuento): se guarda el importe real y el precio por kg va a la
+            observación.
+        Al llegar a la línea del TOTAL se deja de buscar productos (lo que
+        viene después es desglose de IVA, pago, etc.).
         """
         productos = []
-        for linea in lineas:
-            if self.es_linea_ruido(linea):
+        for linea_original in lineas:
+            if productos and self.es_linea_total(linea_original):
+                break
+            if self.es_linea_ruido(linea_original):
                 continue
 
+            linea = self.reparar_numeros(linea_original)
             precios = list(RE_PRECIO.finditer(linea))
             if not precios:
                 continue  # sin precio no es una línea de producto
 
-            cantidad = 1
-            m_prefijo = RE_CANTIDAD_PREFIJO.match(linea)
-
-            if m_prefijo:
-                # Formato prefijo: "N x NOMBRE PRECIO"
-                cantidad = int(m_prefijo.group(1))
-                resto = linea[m_prefijo.end():]
-                precios_resto = list(RE_PRECIO.finditer(resto))
-                if not precios_resto:
-                    continue
-                precio_match = precios_resto[-1]
-                nombre = resto[:precio_match.start()]
-            else:
-                # Formato de 4 columnas: NOMBRE | CANTIDAD | PRECIO | IMPORTE
-                # La columna de PRECIO es la primera cifra decimal de la fila.
-                precio_match = precios[0]
-                nombre = linea[:precio_match.start()]
-
-                m_cantidad = RE_CANTIDAD_COLUMNA.search(nombre)
-                if m_cantidad:
-                    cantidad = int(m_cantidad.group(1))
-                    nombre = nombre[:m_cantidad.start()]
-
-                # Autocorrección con la columna de IMPORTE (si existe).
-                if len(precios) >= 2:
-                    precio_unitario = parsear_euros(precio_match.group(1))
-                    importe = parsear_euros(precios[-1].group(1))
-                    if precio_unitario > 0:
-                        cantidad_calculada = round(importe / precio_unitario)
-                        cuadra = abs(cantidad_calculada * precio_unitario - importe) < 0.02
-                        if cantidad_calculada >= 1 and cuadra:
-                            cantidad = cantidad_calculada
-
-            nombre = re.sub(r"\s{2,}", " ", nombre.strip(" .-*:·")).strip()
-            if len(nombre) < 2 or not any(c.isalpha() for c in nombre):
-                continue  # descartar líneas que no tienen un nombre real
-
-            productos.append({
-                "nombre": nombre.title(),
-                "precio": parsear_euros(precio_match.group(1)),
-                "cantidad": cantidad,
-            })
+            producto = self._producto_desde_linea(linea, precios)
+            if producto:
+                productos.append(producto)
         return productos
+
+    def _producto_desde_linea(self, linea, precios):
+        cantidad = 1
+        observacion = ""
+        importe = None
+        m_prefijo = RE_CANTIDAD_PREFIJO.match(linea)
+
+        if m_prefijo:
+            # Formato prefijo: "N x NOMBRE PRECIO"
+            cantidad = int(m_prefijo.group(1))
+            resto = linea[m_prefijo.end():]
+            precios_resto = list(RE_PRECIO.finditer(resto))
+            if not precios_resto:
+                return None
+            precio = parsear_euros(precios_resto[-1].group(1))
+            nombre = resto[:precios_resto[-1].start()]
+        else:
+            # Formato de columnas: NOMBRE | CANTIDAD/PESO | PRECIO | IMPORTE
+            # La columna de PRECIO es la primera cifra decimal de la fila.
+            precio_match = precios[0]
+            precio = parsear_euros(precio_match.group(1))
+            nombre = linea[:precio_match.start()]
+
+            peso = None
+            m_peso = RE_PESO.search(nombre)
+            m_cantidad = RE_CANTIDAD_COLUMNA.search(nombre)
+            if m_peso:
+                peso = float(re.sub(SEP_DECIMAL, ".", m_peso.group(1)))
+                nombre = nombre[:m_peso.start()]
+            elif m_cantidad:
+                cantidad = int(m_cantidad.group(1))
+
+            if len(precios) >= 2:
+                importe = parsear_euros(precios[-1].group(1))
+                cantidad_calculada = round(importe / precio) if precio > 0 else 0
+                cuadra = (cantidad_calculada >= 1
+                          and abs(cantidad_calculada * precio - importe) < 0.02)
+                if cuadra and peso is None:
+                    cantidad = cantidad_calculada
+                else:
+                    # Al peso (o con descuento): el dinero real es el importe.
+                    detalle = f"{formato_euros(precio)} €/kg"
+                    if peso:
+                        detalle = f"{str(peso).replace('.', ',')} kg a {detalle}"
+                    observacion = detalle
+                    cantidad, precio = 1, importe
+                    importe = None
+            elif cantidad > CANTIDAD_MAX_SIN_IMPORTE:
+                cantidad = 1   # sin importe que lo confirme, no es una cantidad fiable
+
+            # Si el número no era la cantidad real (p. ej. "Bahamas 2" con
+            # importe = 1 × precio), es parte del nombre: se deja en su sitio.
+            if m_cantidad and not m_peso and int(m_cantidad.group(1)) == cantidad:
+                nombre = nombre[:m_cantidad.start()]
+            elif m_cantidad and not m_peso and int(m_cantidad.group(1)) > CANTIDAD_MAX_SIN_IMPORTE:
+                nombre = nombre[:m_cantidad.start()]   # basura numérica del OCR
+
+        nombre = re.sub(r"\s{2,}", " ", nombre.strip(" .-~*:·|")).strip()
+        if sum(1 for c in nombre if c.isalpha()) < 3:
+            return None  # descartar líneas que no tienen un nombre real
+
+        producto = {
+            "nombre": nombre.title(),
+            "precio": precio,
+            "cantidad": cantidad,
+            "importe": round(precio * cantidad, 2) if importe is None else importe,
+            "observacion": observacion,
+        }
+        return producto

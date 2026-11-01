@@ -9,21 +9,39 @@
     </div>
 
     <div class="card">
-        <form method="POST" action="{{ url_for('escaneo.desde_foto') }}" enctype="multipart/form-data">
+        <form method="POST" action="{{ url_for('escaneo.desde_foto') }}" enctype="multipart/form-data" id="formFoto">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
+            <!-- Dos entradas: una abre directamente la cámara del móvil y la otra
+                 la galería/archivos. Solo se envía la que tenga foto ("foto"). -->
+            <input type="file" id="fotoCamara" accept="image/*" capture="environment" hidden>
+            <input type="file" id="fotoGaleria" accept="image/*" hidden>
+            <input type="file" id="foto" name="foto" hidden>
+
             <div class="form-group">
-                <label for="foto"><i class="fas fa-image"></i> Foto del ticket</label>
-                <input type="file" id="foto" name="foto"
-                       accept="image/*" capture="environment" required>
+                <label><i class="fas fa-image"></i> Foto del ticket</label>
+                <div class="form-actions" style="margin-top: 0.5rem;">
+                    <button type="button" class="btn btn-primary btn-lg" onclick="document.getElementById('fotoCamara').click()">
+                        <i class="fas fa-camera"></i> Hacer foto
+                    </button>
+                    <button type="button" class="btn btn-secondary btn-lg" onclick="document.getElementById('fotoGaleria').click()">
+                        <i class="fas fa-images"></i> Elegir de la galería
+                    </button>
+                </div>
                 <p class="subtitle" style="margin-top: 0.5rem;">
-                    Enfoca el ticket con buena luz y sin sombras. Cuanto más nítida
+                    Ticket entero, recto, con buena luz y sin sombras. Cuanto más nítida
                     la foto, mejor se leerá.
                 </p>
             </div>
 
+            <div id="vistaPrevia" style="display: none; margin-bottom: 1rem; text-align: center;">
+                <img id="imgPrevia" alt="Foto del ticket"
+                     style="max-width: 100%; max-height: 420px; border-radius: var(--border-radius); box-shadow: var(--shadow-lg);">
+                <p class="subtitle" id="infoFoto" style="margin-top: 0.5rem;"></p>
+            </div>
+
             <div class="form-actions">
-                <button type="submit" class="btn btn-primary btn-lg">
+                <button type="submit" class="btn btn-primary btn-lg" id="btnLeer" disabled>
                     <i class="fas fa-magic"></i> Leer ticket
                 </button>
                 <a href="{{ url_for('tickets.nuevo_ticket') }}" class="btn btn-secondary btn-lg">
@@ -35,10 +53,79 @@
 
     <div class="card">
         <p><i class="fas fa-info-circle"></i>
-            Tras leer la foto verás el formulario ya rellenado para que
+            Tras leer la foto verás el formulario ya rellenado (tienda, fecha, productos,
+            cantidades, importes, categorías y favoritos) para que
             <strong>revises y corrijas</strong> antes de guardar. La primera lectura
             puede tardar un poco más mientras se prepara el lector.
         </p>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Lado mayor al que se reduce la foto antes de subirla: las del móvil pesan
+    // 3-10 MB y tardan en subir; el servidor tampoco usa más de 2000 px.
+    const LADO_MAX = 2000;
+
+    const inputFinal = document.getElementById('foto');
+    const btnLeer = document.getElementById('btnLeer');
+
+    ['fotoCamara', 'fotoGaleria'].forEach(id => {
+        document.getElementById(id).addEventListener('change', e => {
+            const archivo = e.target.files && e.target.files[0];
+            if (archivo) prepararFoto(archivo);
+            e.target.value = '';   // permite volver a elegir la misma foto
+        });
+    });
+
+    async function prepararFoto(archivo) {
+        let final = archivo;
+        try {
+            final = await reducirFoto(archivo);
+        } catch (err) {
+            // Si el navegador no puede procesarla (formato raro), se sube tal cual.
+            console.warn('No se pudo reducir la foto, se envía la original:', err);
+        }
+        const dt = new DataTransfer();
+        dt.items.add(final);
+        inputFinal.files = dt.files;
+
+        document.getElementById('imgPrevia').src = URL.createObjectURL(final);
+        document.getElementById('infoFoto').textContent =
+            `${final.name} · ${(final.size / 1024 / 1024).toFixed(1)} MB`;
+        document.getElementById('vistaPrevia').style.display = 'block';
+        btnLeer.disabled = false;
+    }
+
+    // Reduce la foto a LADO_MAX px en JPEG. El navegador ya aplica la rotación
+    // EXIF al dibujarla, así que la imagen resultante sale derecha.
+    async function reducirFoto(archivo) {
+        const bitmap = await createImageBitmap(archivo, { imageOrientation: 'from-image' });
+        const escala = Math.min(1, LADO_MAX / Math.max(bitmap.width, bitmap.height));
+        if (escala === 1 && archivo.size < 2 * 1024 * 1024 && /jpe?g|png|webp/i.test(archivo.type)) {
+            return archivo;   // ya es pequeña: no hace falta tocarla
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(bitmap.width * escala);
+        canvas.height = Math.round(bitmap.height * escala);
+        canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+        const blob = await new Promise(ok => canvas.toBlob(ok, 'image/jpeg', 0.9));
+        if (!blob) throw new Error('toBlob devolvió null');
+        return new File([blob], 'ticket.jpg', { type: 'image/jpeg' });
+    }
+
+    document.getElementById('formFoto').addEventListener('submit', e => {
+        if (!inputFinal.files.length) {
+            e.preventDefault();
+            alert('Primero haz o elige una foto del ticket.');
+            return;
+        }
+        btnLeer.disabled = true;
+        mostrarLoading('Leyendo el ticket... (la primera vez puede tardar un minuto)');
+    });
+
+    // Al volver con el botón "atrás" del navegador, quitar el aviso de carga.
+    window.addEventListener('pageshow', () => { ocultarLoading(); btnLeer.disabled = !inputFinal.files.length; });
+</script>
 {% endblock %}

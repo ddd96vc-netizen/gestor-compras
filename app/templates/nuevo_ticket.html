@@ -16,10 +16,26 @@
     </div>
 
     {% if prefill %}
-    <div class="alert alert-info">
+    <div class="alert alert-info alert-fija">
         <span class="alert-icon"><i class="fas fa-magic"></i></span>
         Hemos rellenado el ticket a partir de la foto. <strong>Revisa y corrige</strong> lo que haga falta antes de guardar.
+        Los nombres y categorías salen de tus compras anteriores; pasa el ratón (o mantén pulsado) sobre un nombre para ver lo que se leyó en el ticket.
     </div>
+    {% if prefill.total is not none and prefill.suma is defined %}
+        {% if prefill.cuadra %}
+        <div class="alert alert-success alert-fija">
+            <span class="alert-icon"><i class="fas fa-check-circle"></i></span>
+            El total del ticket ({{ '%.2f' | format(prefill.total) }} €) cuadra con la suma de los productos leídos.
+        </div>
+        {% else %}
+        <div class="alert alert-warning alert-fija">
+            <span class="alert-icon"><i class="fas fa-exclamation-triangle"></i></span>
+            El ticket dice <strong>{{ '%.2f' | format(prefill.total) }} €</strong> pero los productos leídos suman
+            <strong>{{ '%.2f' | format(prefill.suma) }} €</strong>: falta o sobra algún producto
+            (diferencia {{ '%.2f' | format(prefill.total - prefill.suma) }} €).
+        </div>
+        {% endif %}
+    {% endif %}
     {% endif %}
 
     {% if texto_ocr %}
@@ -160,11 +176,16 @@
     let contadorProductos = 0;
 
     document.addEventListener('DOMContentLoaded', function () {
-        if (PREFILL && PREFILL.productos && PREFILL.productos.length) {
+        if (PREFILL) {
             // --- Modo revisión: rellenar con lo detectado en la foto ---
+            // (tienda y fecha aunque no se haya leído ningún producto)
             if (PREFILL.tienda) document.getElementById('tienda').value = PREFILL.tienda;
-            if (PREFILL.fecha) document.getElementById('fecha').value = PREFILL.fecha;
-            PREFILL.productos.forEach(agregarProductoConDatos);
+            document.getElementById('fecha').value = PREFILL.fecha || fechaLocalAhora();
+            if (PREFILL.productos && PREFILL.productos.length) {
+                PREFILL.productos.forEach(agregarProductoConDatos);
+            } else {
+                agregarProducto();
+            }
         } else {
             // --- Modo normal: fecha actual y un producto vacío ---
             document.getElementById('fecha').value = fechaLocalAhora();
@@ -196,14 +217,43 @@
         setTimeout(() => fila.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 100);
     }
 
-    // Crea una fila ya rellenada con un producto detectado por el OCR.
+    // Crea una fila ya rellenada con un producto detectado por el OCR
+    // (y completado con el historial: nombre habitual, categoría, favorito).
     function agregarProductoConDatos(p) {
         const fila = nuevaFila();
-        fila.querySelector('input[name="producto_nombre[]"]').value = p.nombre || '';
+        const nombre = fila.querySelector('input[name="producto_nombre[]"]');
+        nombre.value = p.nombre || '';
+        if (p.nombre_leido && p.nombre_leido !== p.nombre) {
+            nombre.title = 'Leído en el ticket: ' + p.nombre_leido;
+        }
         fila.querySelector('input[name="producto_cantidad[]"]').value = p.cantidad && p.cantidad > 1 ? p.cantidad : '';
         fila.querySelector('input[name="producto_precio[]"]').value =
             (typeof p.precio === 'number') ? p.precio.toFixed(2) : '';
+        fila.querySelector('input[name="producto_observacion[]"]').value = p.observacion || '';
+        if (p.categoria) seleccionarCategoria(fila.querySelector('select[name="producto_categoria[]"]'), p.categoria);
+        if (p.favorito) alternarFavForm(fila.querySelector('.btn-fav-form'));
+
+        // Importe de la línea tal como viene en el ticket. Solo se fija "a mano"
+        // si no coincide con precio × cantidad (ofertas, productos al peso...).
+        const importe = fila.querySelector('.importe-linea');
+        const cantidad = p.cantidad && p.cantidad > 0 ? p.cantidad : 1;
+        if (typeof p.importe === 'number' && Math.abs(p.importe - p.precio * cantidad) > 0.005) {
+            importe.value = p.importe.toFixed(2);
+            importe.dataset.manual = '1';
+        }
         actualizarImporteFila(fila);
+    }
+
+    // Selecciona la categoría en el desplegable (la añade si aún no existe).
+    function seleccionarCategoria(select, categoria) {
+        const existente = Array.from(select.options).find(o => o.value === categoria);
+        if (!existente) {
+            const opt = document.createElement('option');
+            opt.value = categoria;
+            opt.textContent = categoria;
+            select.insertBefore(opt, select.querySelector('option[value="__nueva__"]'));
+        }
+        select.value = categoria;
     }
 
     function eliminarProducto(btn) {

@@ -4,6 +4,8 @@ escaneo.py - Alta de ticket desde una foto
 Flujo:
   1. El usuario sube una foto del ticket.
   2. Se extrae el texto con OCR y se parsea según la tienda.
+  2b. Se completa con tu historial (nombre habitual, categoría, favorito):
+      ver app/ocr/sugerencias.py.
   3. Se muestra el formulario de "nuevo ticket" YA RELLENADO con lo detectado,
      para que el usuario revise, corrija y guarde. No se guarda nada de forma
      automática: el guardado usa la ruta y la lógica de siempre.
@@ -26,10 +28,11 @@ from app.database import get_db
 from app.seguridad import login_requerido
 from app.ocr.lector import extraer_texto, OcrNoDisponible
 from app.ocr.parsers import parsear_ticket
+from app.ocr.sugerencias import completar
 
 bp = Blueprint("escaneo", __name__)
 
-EXTENSIONES_OK = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
+EXTENSIONES_OK = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff"}
 
 
 @bp.route("/nuevo_ticket/foto", methods=["GET", "POST"])
@@ -62,15 +65,20 @@ def desde_foto():
     finally:
         _borrar(ruta)
 
-    datos = parsear_ticket(texto)
     _guardar_muestra(texto)
+    db = get_db()
+    datos = completar(db, parsear_ticket(texto), texto)
 
     if not datos["productos"]:
         flash("No se detectaron productos en la foto. Puedes rellenarlos a mano.", "warning")
+    else:
+        suma = round(sum(p["importe"] for p in datos["productos"]), 2)
+        datos["suma"] = suma
+        datos["cuadra"] = datos["total"] is None or abs(suma - datos["total"]) < 0.02
 
     return render_template(
         "nuevo_ticket.html",
-        categorias=repositorio.categorias_existentes(get_db()),
+        categorias=repositorio.categorias_existentes(db),
         prefill=datos,
         texto_ocr=texto,
     )

@@ -130,3 +130,91 @@ def test_precio_tolera_espacios_del_ocr():
     """El OCR a veces mete un espacio antes de la coma: '1 ,16'."""
     from app.ocr.parsers.base import parsear_euros
     assert parsear_euros("1 ,16") == 1.16
+
+
+# --- Tickets reales (texto OCR tal cual, de instance/ocr_muestras/) ---
+
+TICKET_DEZA = """Deza Zoco-957456125 Deza Calidad; 5.6,
+NS 66745 P Las Quemadas, 116
+01-08-2026 14: 13:25 14014 Cordoba
+Caja 10-003128 614051585
+Descr iccicn Cøntidad Pvp Inporte
+Bêtido de chocolate PULEVA botella 1'99 1'99
+Bolsa reciclade 70* DEZA 48x59 6200 2 0'12 0' 24
+Filetes de cerdo FACCSA ~kg - 1'6 3'95 6'12
+Janoncitos de Pollo INASUR enteros 1 1 2'69 2*84
+Refresco CoCh {olA 1.25 L 1'55 1'55
+Tipo Base Iva Total 30*51
+4% 2'78 0'11 Hetalico entregado 50
+212 2'50 0'53 Devuelto 19' 49"""
+
+TICKET_DIA = """GRUPO DIA
+FACTURA SIMPLIFICADA
+08-07-2026 17;07 07726 0o7726003
+DESCRIPCION ARTICULO IMPORTE €
+BOLSA 50* RECICLADA 0,15 €
+CERVEZA LATA RAMBLER 0 46
+LECHUGA   ROMANA   0,89 A
+TOTAL COMPRA GRUPO DIA < 2 rne 8 ,12,<
+DESGLOSES DEL IvA GRupo DiA Aeoet"""
+
+TICKET_EL_JAMON = """4 PINTOR  EsPinosa _ F Datou 19
+FECHA 3 27/07/2026   TPV : 02 CENTRO; 403
+21:00
+LoNCHAS   KROL 2 0,95 1 90
+ATrN FeniCiA 1 1 89 1,89
+NESTLf 9OOG 45 1,45
+TotaL FACTURA 9,90"""
+
+
+def test_deza_precios_con_apostrofo_y_al_peso():
+    r = parsear_ticket(TICKET_DEZA)
+    assert r["tienda"] == "Zoco"
+    assert r["fecha"] == "2026-08-01T14:13"        # "14: 13:25" con espacio del OCR
+    assert r["total"] == 30.51
+    por_nombre = {p["nombre"].split()[0]: p for p in r["productos"]}
+    assert len(r["productos"]) == 5                 # el desglose de IVA no cuenta
+    assert por_nombre["Bêtido"]["precio"] == 1.99   # "botella" ya no se toma por "TEL"
+    assert por_nombre["Bolsa"]["cantidad"] == 2 and por_nombre["Bolsa"]["importe"] == 0.24
+    # Al peso: el dinero real es el importe y el €/kg va a la observación.
+    filetes = por_nombre["Filetes"]
+    assert (filetes["precio"], filetes["cantidad"]) == (6.12, 1)
+    assert filetes["observacion"] == "1,6 kg a 3,95 €/kg"
+    assert por_nombre["Janoncitos"]["precio"] == 2.84
+    # "1.25 L" es el tamaño, no el precio.
+    assert por_nombre["Refresco"]["precio"] == 1.55
+
+
+def test_dia_precio_partido_y_hora_con_punto_y_coma():
+    r = parsear_ticket(TICKET_DIA)
+    assert r["tienda"] == "Dia"
+    assert r["fecha"] == "2026-07-08T17:07"
+    assert r["total"] == 8.12
+    precios = [p["precio"] for p in r["productos"]]
+    assert precios == [0.15, 0.46, 0.89]          # "0 46" -> 0,46
+
+
+def test_el_jamon_cantidades_sin_columna_de_importe():
+    r = parsear_ticket(TICKET_EL_JAMON)
+    assert r["tienda"] == "El Jamon (Pintor)"
+    assert r["fecha"] == "2026-07-27T21:00"
+    lonchas, atun, nestle = r["productos"]
+    assert (lonchas["cantidad"], lonchas["precio"], lonchas["importe"]) == (2, 0.95, 1.90)
+    assert (atun["cantidad"], atun["precio"]) == (1, 1.89)     # "1 89" no es cantidad 89
+    assert (nestle["cantidad"], nestle["precio"]) == (1, 1.45)  # "45" no es cantidad 45
+    assert round(sum(p["importe"] for p in r["productos"]), 2) == 5.24
+
+
+def test_precio_con_apostrofo_y_asterisco():
+    from app.ocr.parsers.base import parsear_euros
+    assert parsear_euros("1'24") == 1.24
+    assert parsear_euros("0' 24") == 0.24
+    assert parsear_euros("2*84") == 2.84
+
+
+def test_tienda_reconocida_aunque_el_ocr_la_lea_mal():
+    r = parsear_ticket("Pinir Espinmo 19\nFECHA 04/07/2026\nSALCHICHA 2,45 2,45")
+    assert r["tienda"] == "El Jamon (Pintor)"
+    assert parsear_ticket("MERCADOMA S.A.\nLECHE 1,20")["tienda"] == "Mercadona"
+    # Las claves cortas solo valen exactas: "DEZO" no es Deza.
+    assert parsear_ticket("DEZO\nLECHE 1,20")["parser"] == "ParserGenerico"

@@ -10,12 +10,15 @@ En PRODUCCIÓN no se usa este fichero; se sirve con un servidor WSGI:
     gunicorn "app:create_app()"
 """
 
+import os
+
 from app import create_app
 
 app = create_app()
 
 if __name__ == "__main__":
-    # host 127.0.0.1 = accesible solo desde tu equipo (seguro por defecto).
-    # Para alcanzarlo desde otros dispositivos de tu red usa host="0.0.0.0"
-    # de forma consciente. El modo debug lo decide la configuración (.env).
-    app.run(host="127.0.0.1", port=5000)
+    # HOST=127.0.0.1 (por defecto) = accesible solo desde tu equipo.
+    # HOST=0.0.0.0 en el .env = accesible desde el móvil en tu misma wifi
+    # (http://IP-DEL-PC:5000), para hacer las fotos de los tickets con él.
+    # El modo debug lo decide la configuración (.env).
+    app.run(host=os.environ.get("HOST", "127.0.0.1"), port=int(os.environ.get("PORT", 5000)))

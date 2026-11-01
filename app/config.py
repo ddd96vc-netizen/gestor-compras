@@ -30,7 +30,7 @@ class BaseConfig:
     RATELIMIT_STORAGE_URI = "memory://"  # en memoria; para varios procesos usar Redis
 
     # --- Subida de imágenes (escaneo de tickets) ---
-    MAX_CONTENT_LENGTH = 10 * 1024 * 1024  # 10 MB máximo por foto
+    MAX_CONTENT_LENGTH = 20 * 1024 * 1024  # 20 MB máximo por foto (el navegador ya la reduce antes de subirla)
 
     @staticmethod
     def init_app(app):

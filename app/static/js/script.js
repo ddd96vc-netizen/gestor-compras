@@ -32,7 +32,8 @@ document.addEventListener('DOMContentLoaded', function() {
 // ============================================================
 
 document.addEventListener('DOMContentLoaded', function() {
-    const flashMessages = document.querySelectorAll('.alert');
+    // .alert-fija = aviso que debe quedarse (p. ej. el total al revisar un ticket escaneado).
+    const flashMessages = document.querySelectorAll('.alert:not(.alert-fija)');
     
     flashMessages.forEach(alert => {
         // Auto-cerrar después de 5 segundos

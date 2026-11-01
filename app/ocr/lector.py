@@ -46,11 +46,38 @@ def _obtener_lector():
     return _lector
 
 
+# Lado mayor con el que se pasa la foto al OCR. Las fotos de móvil (4000 px)
+# son lentísimas en CPU y no se leen mejor; con ~2000 px el texto del ticket
+# sigue teniendo de sobra.
+LADO_MAX = 2000
+
+
+def preparar_imagen(ruta_imagen):
+    """Abre la foto y la deja lista para el OCR (devuelve un array de numpy).
+
+      - Aplica la rotación EXIF: el móvil guarda la foto "tumbada" y anota en
+        los metadatos que hay que girarla. EasyOCR no lee esos metadatos, así
+        que sin esto lee el ticket de lado y devuelve basura.
+      - Escala de grises + autocontraste: el papel térmico sale grisáceo.
+      - Reduce las fotos enormes a LADO_MAX píxeles.
+    """
+    import numpy as np
+    from PIL import Image, ImageOps
+
+    with Image.open(ruta_imagen) as img:
+        img = ImageOps.exif_transpose(img)
+        img = img.convert("L")
+        if max(img.size) > LADO_MAX:
+            img.thumbnail((LADO_MAX, LADO_MAX), Image.LANCZOS)
+        img = ImageOps.autocontrast(img, cutoff=1)
+        return np.array(img)
+
+
 def extraer_texto(ruta_imagen) -> str:
     """Devuelve el texto de la imagen, reconstruido en filas (ver docstring del módulo)."""
     lector = _obtener_lector()
     # detail=1 -> cada resultado es (bbox, texto, confianza), con la posición.
-    resultados = lector.readtext(str(ruta_imagen), detail=1, paragraph=False)
+    resultados = lector.readtext(preparar_imagen(ruta_imagen), detail=1, paragraph=False)
     filas = reconstruir_filas(resultados)
     return "\n".join(filas)
 
