@@ -1,10 +1,45 @@
 # 🛒 SoloCompras — Gestor de Compras
 
-Aplicación web para registrar tickets de compra **haciéndoles una foto con el
-móvil**, organizar productos por categoría, marcar favoritos y analizar gastos
-(por tienda, por fecha y por frecuencia de producto) con gráficos interactivos.
+[![Tests](https://github.com/ddd96vc-netizen/gestor-compras/actions/workflows/tests.yml/badge.svg)](https://github.com/ddd96vc-netizen/gestor-compras/actions/workflows/tests.yml)
+![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12-blue)
+![Flask](https://img.shields.io/badge/flask-3.x-lightgrey)
+[![Licencia MIT](https://img.shields.io/badge/licencia-MIT-green)](LICENSE)
 
-Construida con **Flask**, **SQLite** y **EasyOCR**.
+Aplicación web para registrar tickets de compra **haciéndoles una foto con el
+móvil** y saber **en qué se va el dinero y dónde sale más barato cada
+producto**: comparación de precios entre tiendas, ranking de lo que más
+compras, evolución mes a mes y aviso de lo que te toca comprar.
+
+Construida con **Flask**, **SQLite** y **EasyOCR**. La uso a diario con mis
+propios tickets (más de 120 desde diciembre de 2025).
+
+> **In English:** a Flask + SQLite web app that reads grocery receipts from a
+> phone photo (EasyOCR + per-store parsers), learns from your purchase history,
+> and turns it into useful statistics: cheapest store per product, monthly
+> spending by category, and what you are due to buy. Layered architecture,
+> 85 pytest tests (including real receipts), CI on GitHub Actions.
+
+### Lo más destacable
+
+- **OCR robusto con fotos reales:** endereza fotos torcidas, reconstruye las
+  filas del ticket y tiene reglas propias por tienda; si una lectura es dudosa,
+  elige la que cuadra con el total impreso.
+- **Estadísticas que responden preguntas reales:** ¿dónde compro más barato?,
+  ¿cuánto me habría ahorrado?, ¿voy por encima de mi gasto normal este mes?
+- **Código mantenible:** application factory, blueprints, capa de datos sin
+  Flask, dinero en céntimos enteros y tests que no necesitan ni fotos ni OCR.
+
+<!--
+## Capturas
+
+| Escaneo de un ticket | Dónde es más barato |
+|---|---|
+| ![Escaneo](docs/capturas/escaneo.png) | ![Precios](docs/capturas/precios.png) |
+
+| Mes a mes | Lo que más compro |
+|---|---|
+| ![Mes a mes](docs/capturas/mes-a-mes.png) | ![Productos](docs/capturas/productos.png) |
+-->
 
 ---
 
@@ -132,6 +167,9 @@ gestor-compras/
 ├── requirements-ocr.txt    # Dependencias del escaneo por foto (pesadas)
 ├── pytest.ini
 ├── .env.example            # Plantilla de variables de entorno
+├── LICENSE                 # MIT
+├── .github/workflows/      # Tests automáticos en cada push (GitHub Actions)
+├── docs/capturas/          # Capturas de pantalla del README
 ├── app/
 │   ├── __init__.py         # create_app() (application factory)
 │   ├── config.py           # Configuración por entornos
@@ -235,3 +273,9 @@ gunicorn "app:create_app()"
   (cajas y texto), así el camino completo se prueba en milisegundos y sin
   subir imágenes al repositorio. Los datos personales de los tickets (nombre
   del cajero, número de tarjeta) se anonimizan antes de añadirlos.
+
+---
+
+## Licencia
+
+[MIT](LICENSE): puedes usar, copiar y modificar el código libremente.

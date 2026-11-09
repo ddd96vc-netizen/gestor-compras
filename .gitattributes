@@ -1,0 +1,5 @@
+# Finales de línea normalizados (LF en el repositorio, sin avisos CRLF en Windows)
+* text=auto
+*.png binary
+*.jpg binary
+*.jpeg binary
