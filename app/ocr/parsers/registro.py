@@ -12,7 +12,8 @@ from difflib import SequenceMatcher
 
 from app.ocr.parsers.deza import ParserDeza
 from app.ocr.parsers.dia import ParserDia
-from app.ocr.parsers.el_jamon import ParserElJamonPintor
+from app.ocr.parsers.el_jamon import ParserElJamon, ParserElJamonPintor
+from app.ocr.parsers.frutas_elena import ParserFrutasElena
 from app.ocr.parsers.generico import ParserGenerico
 from app.ocr.parsers.mercadona import ParserMercadona
 
@@ -21,7 +22,9 @@ PARSERS_ESPECIFICOS = [
     ParserMercadona(),
     ParserDia(),
     ParserDeza(),
-    ParserElJamonPintor(),
+    ParserElJamonPintor(),   # antes que ParserElJamon: es más concreto
+    ParserElJamon(),
+    ParserFrutasElena(),
 ]
 
 # Parser por defecto si no se reconoce la tienda.

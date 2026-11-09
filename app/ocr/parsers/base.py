@@ -24,6 +24,13 @@ RE_PRECIO = re.compile(
     re.IGNORECASE,
 )
 RE_FECHA = re.compile(r"(\d{1,2})\s*[/\-.]\s*\*?(\d{1,2})\s*[/\-.]\s*\*?(\d{4}|\d{2})(?!\d)")
+# Fecha con el mes en letras: "01 NOV 26", "21 OCT/26" (fruterías, bazares).
+MESES = {"ENE": 1, "FEB": 2, "MAR": 3, "ABR": 4, "MAY": 5, "JUN": 6, "JUL": 7,
+         "AGO": 8, "SEP": 9, "SET": 9, "OCT": 10, "NOV": 11, "DIC": 12}
+RE_FECHA_MES = re.compile(
+    r"(?<!\d)(\d{1,2})\s*[/\-. ]?\s*(" + "|".join(MESES) + r")[A-Z]*\.?\s*[/\-. ]?\s*(\d{4}|\d{2})(?!\d)",
+    re.IGNORECASE,
+)
 RE_HORA = re.compile(r"(?<!\d)([01]?\d|2[0-3])\s?[:;]\s?([0-5]\d)(?!\d)")   # 21:28 · 17;07 · 14: 13
 RE_CANTIDAD_PREFIJO = re.compile(r"^\s*(\d{1,3})\s*[xX*]\s+")   # "3 x ..."  ·  "2x ..."
 RE_CANTIDAD_COLUMNA = re.compile(r"(?<![\d.,'])(\d{1,3})\s*$")  # entero suelto al final
@@ -86,12 +93,56 @@ class ParserTicket:
 
     def parsear(self, texto: str) -> dict:
         lineas = self.dividir_lineas(texto)
+        productos = self.extraer_productos(lineas)
+        total = self.extraer_total(lineas)
+        self.cuadrar_con_total(productos, total)
+        for producto in productos:
+            producto.pop("_alternativas", None)
         return {
             "tienda": self.extraer_tienda(texto, lineas),
             "fecha": self.extraer_fecha(texto),
-            "productos": self.extraer_productos(lineas),
-            "total": self.extraer_total(lineas),
+            "productos": productos,
+            "total": total,
         }
+
+    # Máximo de líneas dudosas que se prueban al cuadrar (2^N combinaciones).
+    MAX_DUDOSAS = 12
+
+    def cuadrar_con_total(self, productos: list, total) -> None:
+        """Usa el TOTAL impreso para elegir entre lecturas dudosas del OCR.
+
+        Algunas líneas admiten dos lecturas (p. ej. "Bahamas 2  1'24": ¿2
+        unidades o el "2" es parte del nombre? · "0'74  4'74": ¿el OCR leyó
+        mal un dígito del importe?). Cada producto dudoso guarda sus
+        alternativas en "_alternativas"; aquí se prueba la combinación que
+        hace que la suma coincida con el total, cambiando lo mínimo. Si
+        ninguna cuadra, se deja todo como estaba.
+        """
+        if not total or not productos:
+            return
+        suma = round(sum(p["importe"] for p in productos), 2)
+        if abs(suma - total) < 0.005:
+            return
+        dudosos = [p for p in productos if p.get("_alternativas")][: self.MAX_DUDOSAS]
+        if not dudosos:
+            return
+        from itertools import product as combinaciones
+        base = suma - sum(p["importe"] for p in dudosos)
+        mejor = None
+        opciones = [[None] + p["_alternativas"] for p in dudosos]
+        for eleccion in combinaciones(*opciones):
+            cambios = sum(1 for e in eleccion if e is not None)
+            s = base + sum(p["importe"] if e is None else e["importe"] for p, e in zip(dudosos, eleccion))
+            if abs(round(s, 2) - total) < 0.005 and (mejor is None or cambios < mejor[0]):
+                mejor = (cambios, eleccion)
+        if mejor:
+            for p, e in zip(dudosos, mejor[1]):
+                if e is not None:
+                    p.update(e)
+
+    def preparar_linea(self, linea: str) -> str:
+        """Gancho para reglas propias de cada tienda (por defecto no cambia nada)."""
+        return linea
 
     # --- Utilidades ---
 
@@ -135,9 +186,18 @@ class ParserTicket:
         return ""
 
     def extraer_fecha(self, texto: str) -> str:
-        """Devuelve la fecha en formato 'YYYY-MM-DDTHH:MM' (para el <input>)."""
-        for mf in RE_FECHA.finditer(texto):
+        """Devuelve la fecha en formato 'YYYY-MM-DDTHH:MM' (para el <input>).
+
+        Prioridad: fechas con año de 4 cifras ("16-10-2026"); después las de
+        2 cifras ("27/10/26"), que se confunden con otros números ("S.A. 16"
+        -> "5.4. 16"); y por último el mes en letras ("01 NOV 26").
+        """
+        candidatas = sorted(RE_FECHA.finditer(texto), key=lambda m: len(m.group(3)) != 4)
+        candidatas += [m for m in RE_FECHA_MES.finditer(texto)]
+        for mf in candidatas:
             dia, mes, anio = mf.groups()
+            if not mes.isdigit():
+                mes = MESES[mes[:3].upper()]
             if len(anio) == 2:
                 anio = "20" + anio
             try:
@@ -194,7 +254,7 @@ class ParserTicket:
             if self.es_linea_ruido(linea_original):
                 continue
 
-            linea = self.reparar_numeros(linea_original)
+            linea = self.reparar_numeros(self.preparar_linea(linea_original))
             precios = list(RE_PRECIO.finditer(linea))
             if not precios:
                 continue  # sin precio no es una línea de producto
@@ -208,6 +268,7 @@ class ParserTicket:
         cantidad = 1
         observacion = ""
         importe = None
+        alternativas = []
         m_prefijo = RE_CANTIDAD_PREFIJO.match(linea)
 
         if m_prefijo:
@@ -242,6 +303,14 @@ class ParserTicket:
                           and abs(cantidad_calculada * precio - importe) < 0.02)
                 if cuadra and peso is None:
                     cantidad = cantidad_calculada
+                elif peso is None and _un_digito_distinto(precio, importe):
+                    # "0'74  4'74": casi seguro un dígito mal leído. Se deja
+                    # como al peso, pero con la alternativa "1 × precio" para
+                    # que el total decida (ver cuadrar_con_total).
+                    alternativas.append({"cantidad": 1, "precio": precio, "importe": precio, "observacion": ""})
+                    observacion = f"{formato_euros(precio)} €/kg"
+                    cantidad, precio = 1, importe
+                    importe = None
                 else:
                     # Al peso (o con descuento): el dinero real es el importe.
                     detalle = f"{formato_euros(precio)} €/kg"
@@ -252,6 +321,10 @@ class ParserTicket:
                     importe = None
             elif cantidad > CANTIDAD_MAX_SIN_IMPORTE:
                 cantidad = 1   # sin importe que lo confirme, no es una cantidad fiable
+            elif cantidad > 1:
+                # Sin importe que lo confirme, "Bahamas 2  1'24" puede ser 2
+                # unidades o parte del nombre: el total decide.
+                alternativas.append({"cantidad": 1, "precio": precio, "importe": precio})
 
             # Si el número no era la cantidad real (p. ej. "Bahamas 2" con
             # importe = 1 × precio), es parte del nombre: se deja en su sitio.
@@ -271,4 +344,12 @@ class ParserTicket:
             "importe": round(precio * cantidad, 2) if importe is None else importe,
             "observacion": observacion,
         }
+        if alternativas:
+            producto["_alternativas"] = alternativas
         return producto
+
+
+def _un_digito_distinto(a: float, b: float) -> bool:
+    """¿Se escriben igual salvo un dígito? (0,74 / 4,74 · 1,98 / 7,98)"""
+    x, y = formato_euros(a), formato_euros(b)
+    return len(x) == len(y) and sum(1 for c, d in zip(x, y) if c != d) == 1
