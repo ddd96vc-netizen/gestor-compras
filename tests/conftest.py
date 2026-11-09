@@ -41,3 +41,20 @@ def conn_datos(conn):
         {"nombre": "Huevos", "precio": "2.00"},
     ])
     return conn
+
+
+@pytest.fixture
+def client_logueado(tmp_path, monkeypatch):
+    """Cliente Flask ya logueado, con una BD temporal (nunca la real) y un par de tickets."""
+    monkeypatch.setenv("DATABASE_PATH", str(tmp_path / "test.db"))
+    from app import create_app
+    app = create_app("testing")
+    c = conectar(app.config["DATABASE"])
+    inicializar(c)
+    repositorio.crear_ticket(c, "Zoco", "2026-01-01T10:00", [{"nombre": "Leche", "precio": "1.00"}])
+    repositorio.crear_ticket(c, "Dia", "2026-01-08T10:00", [{"nombre": "Leche", "precio": "1.20"}])
+    c.close()
+    cliente = app.test_client()
+    with cliente.session_transaction() as s:
+        s["logueado"] = True
+    return cliente

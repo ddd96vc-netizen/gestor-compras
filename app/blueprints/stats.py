@@ -70,6 +70,30 @@ def frecuencia():
     return render_template("estadisticas_frecuencia.html", datos=datos)
 
 
+@bp.route("/estadisticas/precios")
+@login_requerido
+def precios():
+    """Dónde sale más barato cada producto que compras en varias tiendas."""
+    return render_template("estadisticas_precios.html",
+                           datos=estadisticas.comparar_precios(get_db()))
+
+
+@bp.route("/estadisticas/productos")
+@login_requerido
+def productos():
+    """Lo que más compras: por veces, por gasto y lo que te toca comprar."""
+    return render_template("estadisticas_productos.html",
+                           datos=estadisticas.productos_mas_comprados(get_db()))
+
+
+@bp.route("/estadisticas/meses")
+@login_requerido
+def meses():
+    """Gasto mes a mes, por categoría, y cómo va el mes actual."""
+    return render_template("estadisticas_meses.html",
+                           datos=estadisticas.evolucion_mensual(get_db()))
+
+
 @bp.route("/categorias")
 @login_requerido
 def categorias():

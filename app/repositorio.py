@@ -17,6 +17,7 @@ Notas:
 
 import uuid
 
+from app.tiendas import tienda_canonica
 from app.utilidades import (
     a_centimos, a_euros, a_cantidad, limpiar, normalizar_fecha, partes_fecha,
 )
@@ -368,7 +369,7 @@ def crear_ticket(conn, tienda, fecha, productos) -> str:
     categoria, observacion.
     """
     ticket_id = uuid.uuid4().hex
-    tienda = limpiar(tienda) or "Desconocida"
+    tienda = tienda_canonica(limpiar(tienda)) or "Desconocida"
     fecha_iso = normalizar_fecha(fecha)
 
     with conn:
@@ -390,7 +391,7 @@ def actualizar_ticket(conn, ticket_id, tienda, fecha, productos) -> bool:
     if existe is None:
         return False
 
-    tienda = limpiar(tienda) or "Desconocida"
+    tienda = tienda_canonica(limpiar(tienda)) or "Desconocida"
     fecha_iso = normalizar_fecha(fecha)
 
     with conn:

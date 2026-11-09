@@ -22,8 +22,20 @@ Construida con **Flask**, **SQLite** y **EasyOCR**.
 - Registro, edición y borrado de tickets con varios productos.
 - Categorías (con creación al vuelo), búsqueda de productos y edición rápida
   desde un modal.
-- Estadísticas: resumen general, ranking de tiendas, gasto por rango de
-  fechas y análisis de frecuencia y precio por producto (Chart.js).
+- **Dónde es más barato:** el mismo producto comparado entre tus tiendas,
+  qué tienda es más barata en general (índice de precio, 100 = la media) y
+  cuánto te habrías ahorrado comprando cada cosa en su tienda más barata.
+  Las diferencias enormes (≥ 2,5×) se marcan como "¿distinto tamaño?".
+- **Lo que más compras:** ranking por veces y por dinero, cada cuántos días
+  compras cada producto y aviso de **"te toca comprar"**.
+- **Mes a mes:** gasto mensual por categoría frente a tu media, cómo vas este
+  mes respecto a lo habitual a estas alturas y previsión de cierre.
+- Más estadísticas: resumen general, ranking de tiendas, gasto por rango de
+  fechas y frecuencia de un producto (gráficos con Chart.js).
+- **Nombres unificados:** cada tienda tiene un nombre oficial
+  (`app/tiendas.py`, se aplica al guardar y con `flask normalizar-tiendas`), y
+  las variantes seguras de un mismo producto (erratas, singular/plural) se
+  agrupan en las estadísticas sin tocar los tickets.
 - Acceso protegido por contraseña. Se puede usar desde el móvil en la misma
   wifi para hacer las fotos directamente.
 
@@ -94,7 +106,7 @@ completo para llevarlo a un estándar profesional:
 | IDs `tienda_fecha` (colisionables) | **uuid** únicos para tickets y productos |
 | Todo en un `app.py` de 660 líneas | **App factory + Blueprints** (auth, tickets, escaneo, favoritos, stats, api) |
 | Lógica de negocio mezclada en las rutas | Capa de datos (`repositorio`) y de cálculo (`estadisticas`) separadas |
-| Sin tests | **57 tests** con pytest, incluidos tickets reales completos |
+| Sin tests | **85 tests** con pytest, incluidos tickets reales completos |
 | CSS y JS incrustados en las plantillas, XSS en el cliente | CSS/JS en sus ficheros, salida escapada de forma segura |
 
 ---
@@ -128,7 +140,8 @@ gestor-compras/
 │   ├── seguridad.py        # Decoradores de login
 │   ├── utilidades.py       # Helpers de dinero y fechas
 │   ├── repositorio.py      # CRUD de tickets, productos y favoritos
-│   ├── estadisticas.py     # Cálculos estadísticos
+│   ├── estadisticas.py     # Cálculos estadísticos (precios, rankings, mes a mes)
+│   ├── tiendas.py          # Nombre oficial de cada tienda
 │   ├── blueprints/         # Rutas: auth, tickets, escaneo, favoritos, stats, api
 │   ├── ocr/
 │   │   ├── lector.py       # EasyOCR + reconstrucción de filas
@@ -185,6 +198,7 @@ escaneo muestra un aviso con cómo instalarlas.
 ```bash
 pytest                 # Ejecutar los tests (no necesitan EasyOCR)
 flask init-db          # Crear las tablas en una BD vacía
+flask normalizar-tiendas   # Unificar los nombres de tienda ya guardados
 python run.py          # Servidor de desarrollo
 ```
 

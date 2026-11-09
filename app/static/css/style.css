@@ -1509,3 +1509,93 @@ body {
     margin-top: auto;
     justify-content: center;
 }
+
+/* ============================================================
+   ESTADÍSTICAS DE PRODUCTOS: dónde es más barato / lo que más compro
+   ============================================================ */
+.nota {
+    color: var(--text-light);
+    font-size: 0.9rem;
+    margin: 0.25rem 0 1rem;
+}
+
+.texto-suave { color: var(--text-light); }
+
+.stat-number-texto { font-size: 1.4rem; }
+
+.badge-warning {
+    background: #fff3e0;
+    color: #e65100;
+}
+
+.indice {
+    display: inline-block;
+    min-width: 2.6rem;
+    padding: 0.15rem 0.5rem;
+    border-radius: 999px;
+    font-weight: 700;
+    text-align: center;
+    background: #eceff1;
+}
+.indice-barato { background: #e8f5e9; color: #2e7d32; }
+.indice-caro   { background: #ffebee; color: #c62828; }
+
+.filtro-precios {
+    width: 100%;
+    max-width: 420px;
+    margin-bottom: 1rem;
+    padding: 0.6rem 0.8rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    font-size: 1rem;
+}
+
+.lista-precios { display: flex; flex-direction: column; gap: 0.5rem; }
+
+.precio-item {
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    background: var(--card-bg);
+}
+.precio-item[open] { box-shadow: var(--shadow-md); }
+.precio-item summary {
+    display: grid;
+    grid-template-columns: 2fr 1.5fr 1.5fr 1fr;
+    gap: 0.75rem;
+    align-items: center;
+    padding: 0.7rem 1rem;
+    cursor: pointer;
+    list-style: none;
+}
+.precio-item summary::-webkit-details-marker { display: none; }
+.precio-item summary:hover { background: #f5f9ff; }
+.precio-sospechoso { opacity: 0.75; }
+.precio-barato { color: #2e7d32; font-weight: 600; }
+.precio-caro   { color: #c62828; }
+.precio-ahorro { color: var(--text-light); font-size: 0.9rem; text-align: right; }
+.tabla-tiendas-producto { margin: 0 1rem 1rem; width: calc(100% - 2rem); }
+.fila-barata td { background: #f1f8e9; }
+
+.card-toca { border-left: 5px solid var(--warning-color); }
+.chips-toca { display: flex; flex-wrap: wrap; gap: 0.6rem; }
+.chip-toca {
+    display: flex;
+    flex-direction: column;
+    padding: 0.55rem 0.9rem;
+    border-radius: var(--border-radius);
+    background: #fff8e1;
+    border: 1px solid #ffe0b2;
+}
+.chip-toca span { font-size: 0.8rem; color: var(--text-light); }
+
+.favorito-on { color: #e91e63; }
+
+@media (max-width: 700px) {
+    .precio-item summary { grid-template-columns: 1fr 1fr; }
+    .precio-ahorro { text-align: left; }
+    .tabla-tiendas-producto { margin: 0 0 0.75rem; width: 100%; font-size: 0.85rem; }
+}
+
+.card-orange .stat-icon {
+    background: linear-gradient(135deg, #f7971e 0%, #ffd200 100%);
+}

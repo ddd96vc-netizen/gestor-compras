@@ -196,7 +196,7 @@ def test_dia_precio_partido_y_hora_con_punto_y_coma():
 
 def test_el_jamon_cantidades_sin_columna_de_importe():
     r = parsear_ticket(TICKET_EL_JAMON)
-    assert r["tienda"] == "El Jamon (Pintor)"
+    assert r["tienda"] == "El Jamon"
     assert r["fecha"] == "2026-07-27T21:00"
     lonchas, atun, nestle = r["productos"]
     assert (lonchas["cantidad"], lonchas["precio"], lonchas["importe"]) == (2, 0.95, 1.90)
@@ -214,7 +214,7 @@ def test_precio_con_apostrofo_y_asterisco():
 
 def test_tienda_reconocida_aunque_el_ocr_la_lea_mal():
     r = parsear_ticket("Pinir Espinmo 19\nFECHA 04/07/2026\nSALCHICHA 2,45 2,45")
-    assert r["tienda"] == "El Jamon (Pintor)"
+    assert r["tienda"] == "El Jamon"
     assert parsear_ticket("MERCADOMA S.A.\nLECHE 1,20")["tienda"] == "Mercadona"
     # Las claves cortas solo valen exactas: "DEZO" no es Deza.
     assert parsear_ticket("DEZO\nLECHE 1,20")["parser"] == "ParserGenerico"

@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+{% block title %}Mes a mes · Gestor de Compras{% endblock %}
+
+{% block content %}
+
+<div class="stats-meses-page">
+    <div class="page-header">
+        <div>
+            <h1><i class="fas fa-calendar-alt"></i> Mes a mes</h1>
+            <p class="subtitle">Cuánto gastas cada mes y en qué</p>
+        </div>
+    </div>
+
+    {% if datos.meses %}
+    <div class="stats-cards">
+        {% if datos.actual %}
+        {% set a = datos.actual %}
+        <div class="stat-card {% if a.total > a.media_a_estas_alturas %}card-orange{% else %}card-green{% endif %}">
+            <div class="stat-icon"><i class="fas fa-calendar-day"></i></div>
+            <div class="stat-content">
+                <h3>Este mes ({{ a.etiqueta }})</h3>
+                <p class="stat-number">{{ "%.2f"|format(a.total) }}€</p>
+                <span class="stat-label">
+                    día {{ a.dia }} de {{ a.dias_mes }} · a estas alturas sueles llevar {{ "%.2f"|format(a.media_a_estas_alturas) }}€
+                </span>
+            </div>
+        </div>
+        <div class="stat-card card-purple">
+            <div class="stat-icon"><i class="fas fa-chart-line"></i></div>
+            <div class="stat-content">
+                <h3>Previsión del mes</h3>
+                <p class="stat-number">{{ "%.2f"|format(a.prevision) }}€</p>
+                <span class="stat-label">si sigues al mismo ritmo</span>
+            </div>
+        </div>
+        {% endif %}
+        <div class="stat-card card-blue">
+            <div class="stat-icon"><i class="fas fa-balance-scale"></i></div>
+            <div class="stat-content">
+                <h3>Tu media mensual</h3>
+                <p class="stat-number">{{ "%.2f"|format(datos.media) }}€</p>
+                <span class="stat-label">
+                    {% if datos.mejor %}mejor mes {{ datos.mejor.etiqueta }} ({{ "%.0f"|format(datos.mejor.total) }}€) ·
+                    peor {{ datos.peor.etiqueta }} ({{ "%.0f"|format(datos.peor.total) }}€){% endif %}
+                </span>
+            </div>
+        </div>
+    </div>
+
+    <div class="chart-section">
+        <h2><i class="fas fa-chart-bar"></i> Gasto por mes y categoría</h2>
+        <p class="nota">La línea discontinua es tu media mensual. El mes en curso todavía no ha terminado.</p>
+        <div class="chart-container" style="height: 420px;">
+            <canvas id="graficoMeses"></canvas>
+        </div>
+    </div>
+
+    <div class="card">
+        <h3><i class="fas fa-table"></i> Detalle por mes</h3>
+        <div class="tickets-table-container">
+            <table class="tickets-table">
+                <thead>
+                    <tr>
+                        <th>Mes</th>
+                        <th>Gastado</th>
+                        <th>Frente a tu media</th>
+                        <th>Tickets</th>
+                        <th>Ticket medio</th>
+                        <th>Donde más gastaste</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for m in datos.meses|reverse %}
+                    {% set top = m.categorias|dictsort(by='value')|last %}
+                    <tr>
+                        <td><strong>{{ m.etiqueta }}</strong>{% if m.en_curso %} <span class="badge badge-info">en curso</span>{% endif %}</td>
+                        <td class="ticket-total">{{ "%.2f"|format(m.total) }}€</td>
+                        <td>
+                            {% if m.vs_media is not none %}
+                            <span class="indice {% if m.vs_media < 0 %}indice-barato{% elif m.vs_media > 0 %}indice-caro{% endif %}">
+                                {% if m.vs_media > 0 %}+{% endif %}{{ m.vs_media }}%
+                            </span>
+                            {% else %}—{% endif %}
+                        </td>
+                        <td>{{ m.tickets }}</td>
+                        <td>{{ "%.2f"|format(m.ticket_medio) }}€</td>
+                        <td>{% if top and top[1] > 0 %}{{ top[0] }} <small class="texto-suave">({{ "%.2f"|format(top[1]) }}€)</small>{% else %}—{% endif %}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    {% else %}
+    <div class="empty-state">
+        <i class="fas fa-calendar-alt"></i>
+        <h2>Todavía no hay compras</h2>
+        <p>Cuando registres tickets, aquí verás tu gasto mes a mes.</p>
+    </div>
+    {% endif %}
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+{% if datos.meses %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+    const meses = {{ datos.meses | tojson }};
+    const categorias = {{ datos.categorias | tojson }};
+    const media = {{ datos.media | tojson }};
+    const colores = ['#1e88e5', '#e53935', '#8e24aa', '#fb8c00', '#43a047', '#00acc1', '#9e9e9e'];
+    const ctx = document.getElementById('graficoMeses');
+    new Chart(ctx, {
+        data: {
+            labels: meses.map(m => m.etiqueta + (m.en_curso ? ' *' : '')),
+            datasets: [
+                ...categorias.map((c, i) => ({
+                    type: 'bar',
+                    label: c,
+                    data: meses.map(m => m.categorias[c] || 0),
+                    backgroundColor: colores[i % colores.length],
+                    stack: 'gasto',
+                })),
+                {
+                    type: 'line',
+                    label: 'Tu media',
+                    data: meses.map(() => media),
+                    borderColor: '#333',
+                    borderDash: [6, 4],
+                    borderWidth: 2,
+                    pointRadius: 0,
+                },
+            ],
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                legend: { position: 'bottom' },
+                tooltip: {
+                    callbacks: {
+                        label: c => `${c.dataset.label}: ${c.parsed.y.toFixed(2)}€`,
+                        footer: items => {
+                            const m = meses[items[0].dataIndex];
+                            return `Total: ${m.total.toFixed(2)}€ · ${m.tickets} tickets`;
+                        },
+                    },
+                },
+            },
+            scales: {
+                x: { stacked: true },
+                y: { stacked: true, ticks: { callback: v => v + '€' } },
+            },
+        },
+    });
+</script>
+{% endif %}
+{% endblock %}

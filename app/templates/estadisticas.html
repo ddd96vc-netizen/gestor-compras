@@ -67,6 +67,21 @@
     <div class="quick-stats">
         <h2><i class="fas fa-bolt"></i> Más Estadísticas</h2>
         <div class="stats-grid">
+            <a href="{{ url_for('stats.precios') }}" class="stat-link">
+                <i class="fas fa-piggy-bank"></i>
+                <h3>Dónde es más barato</h3>
+                <p>El mismo producto en tus tiendas</p>
+            </a>
+            <a href="{{ url_for('stats.productos') }}" class="stat-link">
+                <i class="fas fa-shopping-basket"></i>
+                <h3>Lo que más compro</h3>
+                <p>Ranking y qué te toca comprar</p>
+            </a>
+            <a href="{{ url_for('stats.meses') }}" class="stat-link">
+                <i class="fas fa-calendar-alt"></i>
+                <h3>Mes a mes</h3>
+                <p>Cuánto gastas cada mes y en qué</p>
+            </a>
             <a href="{{ url_for('stats.tiendas') }}" class="stat-link">
                 <i class="fas fa-store"></i>
                 <h3>Análisis por Tiendas</h3>

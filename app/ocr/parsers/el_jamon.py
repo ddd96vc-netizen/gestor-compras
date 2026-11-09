@@ -30,4 +30,4 @@ class ParserElJamon(ParserTicket):
 
 class ParserElJamonPintor(ParserElJamon):
     palabras_clave = ("PINTOR ESPINOSA",)
-    nombre_tienda = "El Jamon (Pintor)"
+    nombre_tienda = "El Jamon"   # misma tienda: ver app/tiendas.py

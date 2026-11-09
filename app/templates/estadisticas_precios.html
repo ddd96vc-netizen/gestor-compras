@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+{% block title %}Dónde es más barato · Gestor de Compras{% endblock %}
+
+{% block content %}
+
+<div class="stats-precios-page">
+    <div class="page-header">
+        <div>
+            <h1><i class="fas fa-piggy-bank"></i> Dónde es más barato</h1>
+            <p class="subtitle">El mismo producto, comparado entre las tiendas donde lo has comprado</p>
+        </div>
+    </div>
+
+    {% if datos.productos %}
+    <div class="stats-cards">
+        <div class="stat-card card-green">
+            <div class="stat-icon"><i class="fas fa-piggy-bank"></i></div>
+            <div class="stat-content">
+                <h3>Podrías haber ahorrado</h3>
+                <p class="stat-number">{{ "%.2f"|format(datos.ahorro_total) }}€</p>
+                <span class="stat-label">comprando cada cosa en su tienda más barata</span>
+            </div>
+        </div>
+        <div class="stat-card card-blue">
+            <div class="stat-icon"><i class="fas fa-balance-scale"></i></div>
+            <div class="stat-content">
+                <h3>Productos comparados</h3>
+                <p class="stat-number">{{ datos.num_productos }}</p>
+                <span class="stat-label">comprados en 2 o más tiendas</span>
+            </div>
+        </div>
+        {% if datos.ranking_tiendas %}
+        <div class="stat-card card-purple">
+            <div class="stat-icon"><i class="fas fa-trophy"></i></div>
+            <div class="stat-content">
+                <h3>Tienda más barata</h3>
+                <p class="stat-number stat-number-texto">{{ datos.ranking_tiendas[0].tienda }}</p>
+                <span class="stat-label">{{ 100 - datos.ranking_tiendas[0].indice }}% por debajo de la media</span>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    {% if datos.ranking_tiendas %}
+    <div class="card">
+        <h3><i class="fas fa-list-ol"></i> ¿Qué tienda es más barata en general?</h3>
+        <p class="nota">
+            100 = el precio medio de ese producto entre tus tiendas. Menos de 100 es más barata.
+            Solo cuentan los productos que has comprado en varias tiendas (mínimo 3 por tienda).
+        </p>
+        <div class="tickets-table-container">
+            <table class="tickets-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th><i class="fas fa-store"></i> Tienda</th>
+                        <th>Índice de precio</th>
+                        <th>Más barata en</th>
+                        <th>Productos comparados</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for t in datos.ranking_tiendas %}
+                    <tr>
+                        <td><span class="rank-badge {% if loop.index == 1 %}gold{% elif loop.index == 2 %}silver{% elif loop.index == 3 %}bronze{% endif %}">#{{ loop.index }}</span></td>
+                        <td><strong>{{ t.tienda }}</strong></td>
+                        <td>
+                            <span class="indice {% if t.indice < 100 %}indice-barato{% elif t.indice > 100 %}indice-caro{% endif %}">{{ t.indice }}</span>
+                            {% if t.indice < 100 %}<small>({{ 100 - t.indice }}% más barata)</small>
+                            {% elif t.indice > 100 %}<small>({{ t.indice - 100 }}% más cara)</small>{% endif %}
+                        </td>
+                        <td>{{ t.veces_mas_barata }} productos</td>
+                        <td>{{ t.productos }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="card">
+        <h3><i class="fas fa-tags"></i> Producto por producto</h3>
+        <p class="nota">Ordenados por lo que te habrías ahorrado. Pulsa en un producto para ver el precio en cada tienda.</p>
+        <input type="search" id="filtroPrecios" class="form-control filtro-precios" placeholder="🔍 Buscar producto…" autocomplete="off">
+
+        <div class="lista-precios" id="listaPrecios">
+            {% for p in datos.productos %}
+            <details class="precio-item{% if p.sospechoso %} precio-sospechoso{% endif %}" data-nombre="{{ p.nombre|lower }}">
+                <summary>
+                    <span class="precio-nombre">
+                        <strong>{{ p.nombre }}</strong>
+                        {% if p.sospechoso %}<span class="badge badge-warning" title="Tanta diferencia suele ser otro tamaño de paquete">¿distinto tamaño?</span>{% endif %}
+                    </span>
+                    <span class="precio-barato"><i class="fas fa-check-circle"></i> {{ p.barata }} {{ "%.2f"|format(p.precio_barato) }}€</span>
+                    <span class="precio-caro">{{ p.cara }} {{ "%.2f"|format(p.precio_caro) }}€ <small>(+{{ p.pct_mas_caro }}%)</small></span>
+                    <span class="precio-ahorro">{% if p.ahorro > 0 %}ahorro {{ "%.2f"|format(p.ahorro) }}€{% endif %}</span>
+                </summary>
+                <table class="tickets-table tabla-tiendas-producto">
+                    <thead>
+                        <tr><th>Tienda</th><th>Precio medio</th><th>Último precio</th><th>Última compra</th><th>Veces</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for t in p.tiendas %}
+                        <tr{% if loop.first %} class="fila-barata"{% endif %}>
+                            <td>{% if loop.first %}🏆 {% endif %}<strong>{{ t.tienda }}</strong></td>
+                            <td>{{ "%.2f"|format(t.media) }}€</td>
+                            <td>{{ "%.2f"|format(t.ultimo) }}€</td>
+                            <td>{{ t.ultima_fecha }}</td>
+                            <td>{{ t.veces }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </details>
+            {% endfor %}
+        </div>
+        <p class="nota sin-resultados" id="sinResultados" hidden>No hay ningún producto con ese nombre.</p>
+    </div>
+
+    <p class="nota">
+        <i class="fas fa-info-circle"></i> Se compara por el nombre con el que guardas el producto.
+        Si guardas el mismo producto con dos nombres ("Cruzcampo" y "Cerveza Cruzcampo"), sale por separado.
+        Las entradas tipo "Todo" o "Compra entera" no cuentan.
+    </p>
+
+    {% else %}
+    <div class="empty-state">
+        <i class="fas fa-balance-scale"></i>
+        <h2>Todavía no hay con qué comparar</h2>
+        <p>Cuando compres el mismo producto en dos tiendas distintas, aparecerá aquí cuál es más barata.</p>
+    </div>
+    {% endif %}
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+    (function () {
+        const filtro = document.getElementById('filtroPrecios');
+        if (!filtro) return;
+        const items = document.querySelectorAll('#listaPrecios .precio-item');
+        const vacio = document.getElementById('sinResultados');
+        filtro.addEventListener('input', () => {
+            const q = filtro.value.trim().toLowerCase();
+            let visibles = 0;
+            items.forEach(it => {
+                const ok = !q || it.dataset.nombre.includes(q);
+                it.hidden = !ok;
+                if (ok) visibles++;
+            });
+            vacio.hidden = visibles > 0;
+        });
+    })();
+</script>
+{% endblock %}

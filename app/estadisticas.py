@@ -7,7 +7,12 @@ al final, para que las sumas no acumulen errores de coma flotante.
 Como en el repositorio, cada función recibe la conexión `conn`.
 """
 
-from datetime import datetime
+import calendar
+import re
+import unicodedata
+from collections import Counter, defaultdict
+from datetime import date, datetime
+from statistics import median
 
 from app.utilidades import a_euros, partes_fecha
 
@@ -213,4 +218,309 @@ def stats_categorias(conn) -> dict:
     return {
         f["cat"]: {"cantidad": f["cantidad"], "total": a_euros(f["total_cents"])}
         for f in filas
+    }
+
+
+# ----------------------------------------------------------------------
+# Productos: lo que más compras y dónde sale más barato
+# ----------------------------------------------------------------------
+# El mismo producto se agrupa por su nombre normalizado (sin mayúsculas,
+# acentos ni signos). Las tiendas ya llegan unificadas (app/tiendas.py).
+
+# Entradas que no son un producto (tickets apuntados de golpe): no cuentan
+# para comparar precios ni para los rankings de productos.
+GENERICOS = {
+    "todo", "compra entera", "compra grande", "varios articulos", "no me acuerdo",
+    "cervezas y patatas", "fruta verdura", "frutas", "varios",
+}
+# Se comparan de precio, pero no aportan nada al ranking de "lo que más compras".
+FUERA_DEL_RANKING = {"bolsa", "bolsas", "bolsa reciclada"}
+# Si una tienda cobra 2,5 veces más que otra, seguramente es otro tamaño de paquete.
+RATIO_SOSPECHOSO = 2.5
+
+
+# Nombres que son SEGURO el mismo producto (erratas, singular/plural, con o sin
+# "de"). Solo afecta a las estadísticas: los tickets guardados no se tocan.
+# Ante la duda, NO se une (p. ej. "leche" y "leche covap" son marcas distintas).
+MISMO_PRODUCTO = {
+    "cerveza cruzcampo": "cruzcampo",
+    "higad de pollo": "higado de pollo",
+    "higado pollo": "higado de pollo",
+    "chuleta cabezada": "chuletas cabezada",
+    "chuleta de cerdo": "chuletas de cerdo",
+    "chuletas cerdo": "chuletas de cerdo",
+    "filete de cerdo": "filetes de cerdo",
+    "lomo cerdo": "lomo de cerdo",
+    "lomo de credo marinado": "lomo de cerdo marinado",
+    "muslos pollo": "muslos de pollo",
+    "jamoncitos pollo": "jamoncitos de pollo",
+    "panceta chicharones": "panceta chicharrones",
+    "torreznos chicharron": "torreznos chicharrones",
+    "chicharron": "chicharrones",
+    "salchicha": "salchichas",
+    "lenteja": "lentejas",
+    "lenteja cocida": "lentejas cocidas",
+    "lenteja cocidas": "lentejas cocidas",
+    "garbanzo": "garbanzos",
+    "cebolla": "cebollas",
+    "manzana": "manzanas",
+    "naranja": "naranjas",
+    "platano": "platanos",
+    "ajos": "ajo",
+    "mayones": "mayonesa",
+    "caldo chino": "caldos chinos",
+    "arros rueda": "arroz rueda",
+    "spaguetti": "spaghetti",
+    "spaguetis": "spaghetti",
+    "pure tomate": "pure de tomate",
+    "tortillas de patatas": "tortilla de patatas",
+    "yogur": "yogurt",
+    "yogur griego": "yogurt griego",
+    "yogur liquido": "yogurt liquido",
+    "leche covao": "leche covap",
+    "pan hotdog": "pan hot dogs",
+    "batidochocolate": "batido de chocolate",
+    "refresco bahama": "refresco bahamas",
+    "nectar bahamas": "bahamas nectar",
+    "pasta de diente": "pasta dientes",
+    "cerveza cov": "cerveza coviran",
+}
+
+
+def clave_producto(nombre) -> str:
+    """'Leche  Covap!' y 'leche covap' -> 'leche covap' (y aplica MISMO_PRODUCTO)."""
+    texto = unicodedata.normalize("NFKD", nombre or "")
+    texto = "".join(c for c in texto if not unicodedata.combining(c)).lower()
+    texto = re.sub(r"[^a-z0-9ñ]+", " ", texto)
+    texto = re.sub(r"\s+", " ", texto).strip()
+    return MISMO_PRODUCTO.get(texto, texto)
+
+
+def _compras_por_producto(conn) -> dict:
+    """{clave: {"nombres": Counter, "compras": [dict...]}} sin las entradas genéricas."""
+    filas = conn.execute(
+        """SELECT p.nombre, p.cantidad, p.precio_centimos, p.importe_centimos, p.categoria,
+                  t.tienda, t.fecha
+           FROM productos p JOIN tickets t ON t.id = p.ticket_id
+           ORDER BY t.fecha"""
+    ).fetchall()
+    productos = defaultdict(lambda: {"nombres": Counter(), "compras": []})
+    for f in filas:
+        clave = clave_producto(f["nombre"])
+        if not clave or clave in GENERICOS:
+            continue
+        productos[clave]["nombres"][f["nombre"].strip()] += 1
+        productos[clave]["compras"].append({
+            "tienda": f["tienda"],
+            "fecha": f["fecha"][:10],
+            "cantidad": f["cantidad"] or 1,
+            "precio": f["precio_centimos"],
+            "importe": f["importe_centimos"],
+            "categoria": (f["categoria"] or "").strip(),
+        })
+    return productos
+
+
+def comparar_precios(conn) -> dict:
+    """Productos comprados en 2 o más tiendas: precio medio en cada una, la más
+    barata, cuánto te habrías ahorrado comprándolo siempre allí y qué tienda es
+    más barata en general (índice 100 = precio medio entre tus tiendas)."""
+    productos = []
+    indices = defaultdict(list)            # tienda -> [índice por producto]
+    veces_barata = Counter()
+    for info in _compras_por_producto(conn).values():
+        por_tienda = defaultdict(list)
+        for c in info["compras"]:
+            por_tienda[c["tienda"]].append(c)
+        if len(por_tienda) < 2:
+            continue
+
+        tiendas = []
+        for tienda, cs in por_tienda.items():
+            tiendas.append({
+                "tienda": tienda,
+                "media_cents": sum(c["precio"] for c in cs) / len(cs),
+                "ultimo": a_euros(cs[-1]["precio"]),
+                "ultima_fecha": cs[-1]["fecha"],
+                "veces": len(cs),
+            })
+        tiendas.sort(key=lambda t: t["media_cents"])
+        barata, cara = tiendas[0], tiendas[-1]
+        ratio = cara["media_cents"] / barata["media_cents"] if barata["media_cents"] else 0
+        ahorro = sum(max(0, c["precio"] - barata["media_cents"]) * c["cantidad"] for c in info["compras"])
+        sospechoso = ratio >= RATIO_SOSPECHOSO
+
+        media_producto = sum(t["media_cents"] for t in tiendas) / len(tiendas)
+        if not sospechoso and media_producto:
+            for t in tiendas:
+                indices[t["tienda"]].append(t["media_cents"] / media_producto * 100)
+            veces_barata[barata["tienda"]] += 1
+
+        for t in tiendas:
+            t["media"] = a_euros(round(t.pop("media_cents")))
+        productos.append({
+            "nombre": info["nombres"].most_common(1)[0][0],
+            "tiendas": tiendas,
+            "barata": barata["tienda"],
+            "precio_barato": barata["media"],
+            "cara": cara["tienda"],
+            "precio_caro": cara["media"],
+            "ratio": round(ratio, 2),
+            "pct_mas_caro": round((ratio - 1) * 100),
+            "ahorro": a_euros(round(ahorro)),
+            "compras": len(info["compras"]),
+            "sospechoso": sospechoso,
+        })
+
+    productos.sort(key=lambda p: (p["sospechoso"], -p["ahorro"], p["nombre"].lower()))
+    ranking = sorted(
+        ({"tienda": t, "indice": round(sum(v) / len(v)), "productos": len(v),
+          "veces_mas_barata": veces_barata[t]}
+         for t, v in indices.items() if len(v) >= 3),
+        key=lambda r: r["indice"],
+    )
+    return {
+        "productos": productos,
+        "ahorro_total": round(sum(p["ahorro"] for p in productos if not p["sospechoso"]), 2),
+        "num_productos": len(productos),
+        "ranking_tiendas": ranking,
+    }
+
+
+def productos_mas_comprados(conn, limite=20, hoy=None) -> dict:
+    """Ranking de productos por veces y por gasto, cada cuántos días los compras
+    y cuáles te toca comprar ya (llevas más días que tu ritmo habitual)."""
+    hoy = hoy or date.today()
+    favoritos = {clave_producto(f["nombre_norm"])
+                 for f in conn.execute("SELECT nombre_norm FROM favoritos")}
+
+    lista = []
+    for clave, info in _compras_por_producto(conn).items():
+        if clave in FUERA_DEL_RANKING:
+            continue
+        cs = info["compras"]
+        dias = sorted({c["fecha"] for c in cs})
+        fechas = [date.fromisoformat(d) for d in dias]
+        huecos = [(b - a).days for a, b in zip(fechas, fechas[1:])]
+        cada = round(median(huecos)) if len(huecos) >= 2 else None
+        desde = (hoy - fechas[-1]).days
+        categorias = Counter(c["categoria"] for c in cs if c["categoria"])
+        lista.append({
+            "nombre": info["nombres"].most_common(1)[0][0],
+            "veces": len(dias),
+            "unidades": sum(c["cantidad"] for c in cs),
+            "gasto": a_euros(sum(c["importe"] for c in cs)),
+            "precio_medio": a_euros(round(sum(c["precio"] for c in cs) / len(cs))),
+            "ultima": dias[-1],
+            "dias_desde": desde,
+            "cada_dias": cada,
+            "toca": cada is not None and desde >= cada,
+            "tiendas": sorted({c["tienda"] for c in cs}),
+            "categoria": categorias.most_common(1)[0][0] if categorias else "Sin categoría",
+            "favorito": clave in favoritos,
+        })
+
+    por_veces = sorted(lista, key=lambda p: (-p["veces"], -p["gasto"]))[:limite]
+    por_gasto = sorted(lista, key=lambda p: -p["gasto"])[:limite]
+    # Solo productos habituales (3+ días distintos) y no abandonados: llevas
+    # entre 1 y 2 veces tu ritmo habitual sin comprarlo.
+    toca = sorted(
+        (p for p in lista if p["toca"] and p["veces"] >= 3 and p["dias_desde"] <= 2 * p["cada_dias"]),
+        key=lambda p: p["dias_desde"] / p["cada_dias"], reverse=True,
+    )
+    return {
+        "por_veces": por_veces,
+        "por_gasto": por_gasto,
+        "toca_comprar": toca,
+        "num_productos": len(lista),
+    }
+
+
+# ----------------------------------------------------------------------
+# Evolución mes a mes
+# ----------------------------------------------------------------------
+MESES_CORTOS = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"]
+CATEGORIAS_EN_GRAFICO = 6        # las demás se juntan en "Otras"
+
+
+def _etiqueta_mes(mes: str) -> str:
+    """'2026-03' -> 'mar 26'."""
+    return f"{MESES_CORTOS[int(mes[5:7]) - 1]} {mes[2:4]}"
+
+
+def evolucion_mensual(conn, hoy=None) -> dict:
+    """Gasto por mes (total, tickets, ticket medio y por categoría), la media de
+    los meses completos y cómo va el mes actual frente a esa media."""
+    hoy = hoy or date.today()
+    mes_actual = hoy.strftime("%Y-%m")
+    filas = conn.execute(
+        """SELECT substr(t.fecha, 1, 7) AS mes, t.id AS ticket,
+                  COALESCE(NULLIF(TRIM(p.categoria), ''), 'Sin categoría') AS cat,
+                  p.importe_centimos AS importe
+           FROM tickets t JOIN productos p ON p.ticket_id = t.id"""
+    ).fetchall()
+    if not filas:
+        return {"meses": [], "categorias": [], "media": 0.0, "actual": None, "mejor": None, "peor": None}
+
+    total = defaultdict(int)
+    tickets = defaultdict(set)
+    por_cat = defaultdict(lambda: defaultdict(int))
+    gasto_cat = Counter()
+    for f in filas:
+        total[f["mes"]] += f["importe"]
+        tickets[f["mes"]].add(f["ticket"])
+        por_cat[f["mes"]][f["cat"]] += f["importe"]
+        gasto_cat[f["cat"]] += f["importe"]
+
+    # Todos los meses entre el primero y el actual, aunque alguno no tenga compras.
+    primero = min(total)
+    a, m = int(primero[:4]), int(primero[5:7])
+    lista_meses = []
+    while f"{a:04d}-{m:02d}" <= max(max(total), mes_actual):
+        lista_meses.append(f"{a:04d}-{m:02d}")
+        a, m = (a + 1, 1) if m == 12 else (a, m + 1)
+
+    top = [c for c, _ in gasto_cat.most_common(CATEGORIAS_EN_GRAFICO)]
+    categorias = top + (["Otras"] if len(gasto_cat) > len(top) else [])
+
+    meses = []
+    for mes in lista_meses:
+        cats = por_cat.get(mes, {})
+        reparto = {c: a_euros(cats.get(c, 0)) for c in top}
+        if "Otras" in categorias:
+            reparto["Otras"] = a_euros(sum(v for c, v in cats.items() if c not in top))
+        n = len(tickets.get(mes, ()))
+        meses.append({
+            "mes": mes,
+            "etiqueta": _etiqueta_mes(mes),
+            "total": a_euros(total.get(mes, 0)),
+            "tickets": n,
+            "ticket_medio": round(total.get(mes, 0) / n / 100, 2) if n else 0.0,
+            "categorias": reparto,
+            "en_curso": mes == mes_actual,
+        })
+
+    completos = [x for x in meses if not x["en_curso"]]
+    media = round(sum(x["total"] for x in completos) / len(completos), 2) if completos else 0.0
+    for x in meses:
+        x["vs_media"] = round((x["total"] / media - 1) * 100) if media and not x["en_curso"] else None
+
+    actual = next((x for x in meses if x["en_curso"]), None)
+    if actual:
+        dias_mes = calendar.monthrange(hoy.year, hoy.month)[1]
+        actual = dict(actual)
+        actual["dia"] = hoy.day
+        actual["dias_mes"] = dias_mes
+        actual["prevision"] = round(actual["total"] / hoy.day * dias_mes, 2)
+        actual["media"] = media
+        # Lo que solías llevar gastado a estas alturas del mes (media de los meses completos).
+        actual["media_a_estas_alturas"] = round(media * hoy.day / dias_mes, 2)
+
+    return {
+        "meses": meses,
+        "categorias": categorias,
+        "media": media,
+        "actual": actual,
+        "mejor": min(completos, key=lambda x: x["total"]) if completos else None,
+        "peor": max(completos, key=lambda x: x["total"]) if completos else None,
     }

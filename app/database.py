@@ -129,3 +129,13 @@ def init_app(app) -> None:
         """Crea las tablas de la base de datos."""
         inicializar(get_db())
         click.echo("✅ Base de datos inicializada.")
+
+    @app.cli.command("normalizar-tiendas")
+    @with_appcontext
+    def normalizar_tiendas_command():
+        """Unifica los nombres de tienda de los tickets guardados (app/tiendas.py)."""
+        from app.tiendas import normalizar_tiendas
+        cambios = normalizar_tiendas(get_db())
+        for antes, despues, n in cambios:
+            click.echo(f"  {antes!r} -> {despues!r}  ({n} tickets)")
+        click.echo(f"✅ {len(cambios)} nombres de tienda unificados.")

@@ -1,0 +1,140 @@
+{% extends "base.html" %}
+{% block title %}Lo que más compro · Gestor de Compras{% endblock %}
+
+{% macro tabla_productos(lista, orden) %}
+<div class="tickets-table-container">
+    <table class="tickets-table">
+        <thead>
+            <tr>
+                <th>#</th>
+                <th><i class="fas fa-box"></i> Producto</th>
+                <th>Veces</th>
+                <th>Gastado</th>
+                <th>Precio medio</th>
+                <th>Lo compras cada</th>
+                <th>Última vez</th>
+                <th>Tiendas</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for p in lista %}
+            <tr>
+                <td><span class="rank-badge {% if loop.index == 1 %}gold{% elif loop.index == 2 %}silver{% elif loop.index == 3 %}bronze{% endif %}">#{{ loop.index }}</span></td>
+                <td>
+                    <strong>{{ p.nombre }}</strong>{% if p.favorito %} <i class="fas fa-heart favorito-on" title="Favorito"></i>{% endif %}
+                    <br><small class="texto-suave">{{ p.categoria }}</small>
+                </td>
+                <td{% if orden == 'veces' %} class="ticket-total"{% endif %}>{{ p.veces }}</td>
+                <td{% if orden == 'gasto' %} class="ticket-total"{% endif %}>{{ "%.2f"|format(p.gasto) }}€</td>
+                <td>{{ "%.2f"|format(p.precio_medio) }}€</td>
+                <td>{% if p.cada_dias %}{{ p.cada_dias }} días{% else %}—{% endif %}</td>
+                <td>{{ p.ultima }}<br><small class="texto-suave">hace {{ p.dias_desde }} días</small></td>
+                <td><small>{{ p.tiendas|join(", ") }}</small></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endmacro %}
+
+{% block content %}
+
+<div class="stats-productos-page">
+    <div class="page-header">
+        <div>
+            <h1><i class="fas fa-shopping-basket"></i> Lo que más compro</h1>
+            <p class="subtitle">Tus productos habituales, cuánto te cuestan y cada cuánto los compras</p>
+        </div>
+    </div>
+
+    {% if datos.por_veces %}
+
+    {% if datos.toca_comprar %}
+    <div class="card card-toca">
+        <h3><i class="fas fa-bell"></i> Te toca comprar</h3>
+        <p class="nota">Productos que compras a menudo y que llevan más días de lo normal sin comprarse.</p>
+        <div class="chips-toca">
+            {% for p in datos.toca_comprar %}
+            <div class="chip-toca">
+                <strong>{{ p.nombre }}</strong>
+                <span>lo compras cada {{ p.cada_dias }} días · hace {{ p.dias_desde }}</span>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="chart-section">
+        <h2><i class="fas fa-chart-bar"></i> En qué se te va el dinero</h2>
+        <div class="chart-container" style="height: 420px;">
+            <canvas id="graficoGasto"></canvas>
+        </div>
+    </div>
+
+    <div class="card">
+        <h3><i class="fas fa-euro-sign"></i> Donde más gastas</h3>
+        {{ tabla_productos(datos.por_gasto, 'gasto') }}
+    </div>
+
+    <div class="card">
+        <h3><i class="fas fa-redo"></i> Lo que compras más veces</h3>
+        <p class="nota">"Veces" = días distintos en que lo has comprado.</p>
+        {{ tabla_productos(datos.por_veces, 'veces') }}
+    </div>
+
+    <p class="nota">
+        <i class="fas fa-info-circle"></i> {{ datos.num_productos }} productos distintos.
+        No cuentan las bolsas ni las entradas tipo "Todo" o "Compra entera".
+    </p>
+
+    {% else %}
+    <div class="empty-state">
+        <i class="fas fa-shopping-basket"></i>
+        <h2>Todavía no hay compras</h2>
+        <p>Registra algunos tickets y aquí verás tus productos habituales.</p>
+    </div>
+    {% endif %}
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+{% if datos.por_gasto %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+    const productos = {{ datos.por_gasto[:12] | tojson }};
+    const ctx = document.getElementById('graficoGasto');
+    if (ctx && productos.length) {
+        new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: productos.map(p => p.nombre),
+                datasets: [{
+                    label: 'Gastado (€)',
+                    data: productos.map(p => p.gasto),
+                    backgroundColor: 'rgba(33, 150, 243, 0.75)',
+                    borderRadius: 4,
+                }]
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: c => {
+                                const p = productos[c.dataIndex];
+                                return `${p.gasto.toFixed(2)}€ en ${p.veces} compras`;
+                            }
+                        }
+                    }
+                },
+                scales: { x: { ticks: { callback: v => v + '€' } } }
+            }
+        });
+    }
+</script>
+{% endif %}
+{% endblock %}

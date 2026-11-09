@@ -25,7 +25,7 @@ CASOS = [
     ("deza_torcido_2026-11-03", "Zoco", "2026-11-03T19:14", 26.69, 11),
     ("elena_2026-11-01", "Frutas y Verduras Elena", "2026-11-01T18:28", 7.97, 7),
     ("elena_2026-10-21", "Frutas y Verduras Elena", "2026-10-21T20:30", 4.87, 2),
-    ("el_jamon_pintor_2026-10-15", "El Jamon (Pintor)", "2026-10-15T20:46", 3.64, 2),
+    ("el_jamon_pintor_2026-10-15", "El Jamon", "2026-10-15T20:46", 3.64, 2),
     ("deza_2026-10-16", "Zoco", "2026-10-16", 29.89, 13),
     ("elena_2026-10-19", "Frutas y Verduras Elena", "2026-10-19T17:12", 9.25, 7),
 ]
