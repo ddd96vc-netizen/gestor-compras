@@ -17,7 +17,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
-      - name: Instalar dependencias (sin OCR: los tests no necesitan EasyOCR)
+      - name: "Instalar dependencias (sin OCR, los tests no necesitan EasyOCR)"
         run: pip install -r requirements.txt
       - name: Ejecutar tests
         run: pytest -q
