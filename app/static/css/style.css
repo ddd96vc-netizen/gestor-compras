@@ -1599,3 +1599,25 @@ body {
 .card-orange .stat-icon {
     background: linear-gradient(135deg, #f7971e 0%, #ffd200 100%);
 }
+
+/* Tarjetas blancas en las páginas de estadísticas nuevas */
+.stats-precios-page .card,
+.stats-productos-page .card,
+.stats-meses-page .card {
+    background: var(--card-bg);
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow-md);
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+/* Menú más compacto en pantallas medianas para que quepa "Cerrar sesión" */
+@media (min-width: 769px) and (max-width: 1400px) {
+    .nav-container { padding: 0 12px; }
+    .nav-link { padding: 0.5rem 0.55rem; font-size: 0.88rem; gap: 0.35rem; }
+    .logout-link { padding: 0.5rem 0.8rem !important; }
+    .logout-link i { margin-right: 0.25rem; }
+}
+@media (min-width: 769px) and (max-width: 1150px) {
+    .nav-link i { display: none; }
+}

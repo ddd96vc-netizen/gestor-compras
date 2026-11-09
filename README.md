@@ -29,7 +29,6 @@ propios tickets (más de 120 desde diciembre de 2025).
 - **Código mantenible:** application factory, blueprints, capa de datos sin
   Flask, dinero en céntimos enteros y tests que no necesitan ni fotos ni OCR.
 
-<!--
 ## Capturas
 
 | Escaneo de un ticket | Dónde es más barato |
@@ -39,7 +38,6 @@ propios tickets (más de 120 desde diciembre de 2025).
 | Mes a mes | Lo que más compro |
 |---|---|
 | ![Mes a mes](docs/capturas/mes-a-mes.png) | ![Productos](docs/capturas/productos.png) |
--->
 
 ---
 
